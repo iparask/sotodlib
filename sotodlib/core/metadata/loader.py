@@ -1,19 +1,17 @@
-from sotodlib import core
-
 import collections
 import fnmatch
 import logging
 import os
-import numpy as np
 import warnings
+
+import numpy as np
+from sotodlib import core
 
 from . import ResultSet
 
 logger = logging.getLogger(__name__)
 
-REGISTRY = {
-    '_default': 'DefaultHdf'
-}
+REGISTRY = {"_default": "DefaultHdf"}
 
 
 class LoaderError(RuntimeError):
@@ -145,7 +143,7 @@ class SuperLoader:
             dbfile = os.path.join(self.working_dir, spec.db)
             dbpath = os.path.split(dbfile)[0]
             if dbfile not in self.manifest_cache:
-                if dbfile.endswith('sqlite'):
+                if dbfile.endswith("sqlite"):
                     man = core.metadata.ManifestDb.readonly(dbfile)
                 else:
                     man = core.metadata.ManifestDb.from_file(dbfile)
@@ -158,27 +156,31 @@ class SuperLoader:
 
         # Do we have all the keys we need?
         required_obs_keys = _filter_items(
-            'obs:', man.scheme.get_required_params(), remove=False)
-        missing_obs_keys = (set(required_obs_keys) - set(request.keys()))
+            "obs:", man.scheme.get_required_params(), remove=False
+        )
+        missing_obs_keys = set(required_obs_keys) - set(request.keys())
         if len(missing_obs_keys):
             raise RuntimeError(
-                f'Metadata request is indexed by {request.keys()} but '
-                f'ManifestDb requires {required_obs_keys}.')
+                f"Metadata request is indexed by {request.keys()} but "
+                f"ManifestDb requires {required_obs_keys}."
+            )
 
         required_dets_keys = _filter_items(
-            'dets:', man.scheme.get_required_params(), remove=False)
+            "dets:", man.scheme.get_required_params(), remove=False
+        )
         missing_dets_keys = list((set(required_dets_keys) - set(request.keys())))
 
         if len(missing_dets_keys):
             # Make request to ManifestDb for each detector bundle.
-            short_keys = _filter_items('dets:', missing_dets_keys)
+            short_keys = _filter_items("dets:", missing_dets_keys)
             try:
                 subreqs = det_info.subset(keys=short_keys).distinct()
             except:
                 raise RuntimeError(
-                    f'Metadata request requires keys={missing_dets_keys} '
-                    f'but det_info={det_info}.')
-            subreqs.keys = missing_dets_keys # back with dets: prefix ...
+                    f"Metadata request requires keys={missing_dets_keys} "
+                    f"but det_info={det_info}."
+                )
+            subreqs.keys = missing_dets_keys  # back with dets: prefix ...
         else:
             subreqs = ResultSet([], [()])  # length 1!
 
@@ -193,9 +195,11 @@ class SuperLoader:
                 _lines = man.match(subreq, multi=True, prefix=dbpath)
             except Exception as e:
                 text = str(e)
-                raise LoaderError('Exception when matching subrequest.',
-                                  f"An exception occurred while processing sub-request:\n\n"
-                                  f"  subreq={subreq}\n\n")
+                raise LoaderError(
+                    "Exception when matching subrequest.",
+                    f"An exception occurred while processing sub-request:\n\n"
+                    f"  subreq={subreq}\n\n",
+                )
             for _line in _lines:
                 # Now reject any _line if they contradict subreq.
                 if any([subreq.get(k, v) != v for k, v in _line.items()]):
@@ -207,16 +211,17 @@ class SuperLoader:
         # skip lines that aren't relevant according to det_info.
         to_skip = []
         for index_line in index_lines:
-            logger.debug(f'Pre-screening index_line={index_line}')
+            logger.debug(f"Pre-screening index_line={index_line}")
             skip_this = len(det_info) == 0
             if not skip_this:
                 mask = np.ones(len(det_info), bool)
-                for k, v in _filter_items('dets:', index_line, remove=True).items():
+                for k, v in _filter_items("dets:", index_line, remove=True).items():
                     if k not in det_info.keys:
                         raise IncompleteDetInfoError(
-                            f"Entry requires det_info['{k}'], and that is not defined.")
-                    mask *= (det_info[k] == v)
-                skip_this = (mask.sum() == 0)
+                            f"Entry requires det_info['{k}'], and that is not defined."
+                        )
+                    mask *= det_info[k] == v
+                skip_this = mask.sum() == 0
             to_skip.append(skip_this)
 
         if len(index_lines) == 0:
@@ -237,24 +242,25 @@ class SuperLoader:
         results = []
         for skip, index_line in zip(to_skip, index_lines):
             if skip:
-                logger.debug(f'Skipping load for index_line={index_line}')
+                logger.debug(f"Skipping load for index_line={index_line}")
                 continue
-            logger.debug(f'Loading for index_line={index_line}')
+            logger.debug(f"Loading for index_line={index_line}")
 
             loader = spec.loader
             if loader is None:
-                loader = index_line.get('loader', REGISTRY['_default'])
+                loader = index_line.get("loader", REGISTRY["_default"])
             try:
                 loader_class = REGISTRY[loader]
             except KeyError:
                 raise LoaderError(
-                    'Loader function not found.',
-                    f'No metadata loader registered under name "{loader}"')
+                    "Loader function not found.",
+                    f'No metadata loader registered under name "{loader}"',
+                )
 
             loader_object = loader_class()  # pass obs info?
             loader_kwargs = {}
             if spec.load_fields is not None:
-                loader_kwargs['load_fields'] = spec.load_fields
+                loader_kwargs["load_fields"] = spec.load_fields
             mi1 = loader_object.from_loadspec(index_line, **loader_kwargs)
 
             # Restrict returned values according to the specs in index_line.
@@ -262,18 +268,19 @@ class SuperLoader:
             if isinstance(mi1, ResultSet):
                 # For simple tables, the restrictions can be
                 # integrated into the table, to be dealt with later.
-                det_restricts = _filter_items('dets:', index_line, remove=False)
+                det_restricts = _filter_items("dets:", index_line, remove=False)
                 mask = np.ones(len(mi1), bool)
                 keep_cols = list(mi1.keys)
                 new_cols = []
                 for k, v in det_restricts.items():
                     if k in mi1.keys:
-                        mask *= (mi1[k] == v)
+                        mask *= mi1[k] == v
                     else:
                         new_cols.append((k, v))
                 a = mi1.subset(keys=keep_cols, rows=mask)
-                mi2 = ResultSet([k for k, v in new_cols],
-                                [[v for k, v in new_cols]] * len(a))
+                mi2 = ResultSet(
+                    [k for k, v in new_cols], [[v for k, v in new_cols]] * len(a)
+                )
                 mi2.merge(a)
 
             elif isinstance(mi1, core.AxisManager):
@@ -288,43 +295,56 @@ class SuperLoader:
                 # If the dets axis is present, it *must* reconcile
                 # 1-to-1 with some field in det_info, and that may be
                 # used to toss things out based on index_line.
-                if 'dets' in mi1:
-                    det_restricts = _filter_items('dets:', index_line, remove=True)
-                    dets_key = 'readout_id'
+                if "dets" in mi1:
+                    det_restricts = _filter_items("dets:", index_line, remove=True)
+                    dets_key = "readout_id"
                     new_dets, i_new, i_info = core.util.get_coindices(
-                        mi1.dets.vals, det_info[dets_key])
+                        mi1.dets.vals, det_info[dets_key]
+                    )
 
                     mask = np.ones(len(i_new), bool)
                     if len(i_info):
                         for k, v in det_restricts.items():
-                            mask *= (det_info[k][i_info] == v)
+                            mask *= det_info[k][i_info] == v
                     if mask.all() and len(new_dets) == mi1.dets.count:
                         mi2 = mi1
                     else:
-                        mi2 = mi1.restrict('dets', new_dets[mask])
+                        mi2 = mi1.restrict("dets", new_dets[mask])
                 else:
                     mi2 = mi1
 
             else:
                 raise LoaderError(
-                    'Invalid metadata carrier.',
-                    'Returned object is non-specialized type {}: {}'
-                    .format(mi1.__class__, mi1))
+                    "Invalid metadata carrier.",
+                    "Returned object is non-specialized type {}: {}".format(
+                        mi1.__class__, mi1
+                    ),
+                )
 
             results.append(mi2)
 
         # Check that we got results, then combine them in to single ResultSet.
-        logger.debug(f'Concatenating {len(results)} results: {results}')
-        assert(len(results) > 0)
+        logger.debug(f"Concatenating {len(results)} results: {results}")
+        assert len(results) > 0
         if len(results) == 1:
             result = results[0]
         else:
             result = results[0].concatenate(results)
         return result
 
-    def load(self, spec_list, request, det_info=None, free_tags=[],
-             free_tag_fields=[], dest=None, check=False, det_info_scan=False,
-             ignore_missing=False, on_missing=None):
+    def load(
+        self,
+        spec_list,
+        request,
+        det_info=None,
+        free_tags=[],
+        free_tag_fields=[],
+        dest=None,
+        check=False,
+        det_info_scan=False,
+        ignore_missing=False,
+        on_missing=None,
+    ):
         """Loads metadata objects and processes them into a single
         AxisManager.
 
@@ -367,33 +387,35 @@ class SuperLoader:
         """
         # Augmented request -- note that dets:* restrictions from
         # request will be added back into this by check tags.
-        aug_request = _filter_items('obs:', request, False)
+        aug_request = _filter_items("obs:", request, False)
 
         if on_missing is None:
             on_missing = {}
 
-        if self.obsdb is not None and 'obs:obs_id' in request:
+        if self.obsdb is not None and "obs:obs_id" in request:
             if dest is None:
                 dest = core.AxisManager()
             obs_man = core.AxisManager()
-            obs_info = self.obsdb.get(request['obs:obs_id'], add_prefix='obs:')
+            obs_info = self.obsdb.get(request["obs:obs_id"], add_prefix="obs:")
             if obs_info is None:
                 logger.warning(
                     f"Observation {request['obs:obs_id']} not found in obsdb; "
-                    "trying to proceed anyway. You might have metadata failures.")
-                obs_man.wrap('obs_id', request['obs:obs_id'])
+                    "trying to proceed anyway. You might have metadata failures."
+                )
+                obs_man.wrap("obs_id", request["obs:obs_id"])
             else:
                 obs_info.update(aug_request)
                 aug_request.update(obs_info)
-                for k, v in _filter_items('obs:', obs_info).items():
+                for k, v in _filter_items("obs:", obs_info).items():
                     obs_man.wrap(k, v)
-            dest.wrap('obs_info', obs_man)
+            dest.wrap("obs_info", obs_man)
 
         def reraise(spec, e):
             logger.error(
                 f"An error occurred while processing a meta entry:\n\n"
                 f"  spec:    {spec}\n\n"
-                f"  request: {request}\n\n")
+                f"  request: {request}\n\n"
+            )
             if isinstance(e, LoaderError):
                 # Present all args to logger instead...
                 for a in e.args[1:]:
@@ -407,38 +429,42 @@ class SuperLoader:
             for tag in free_tags:
                 for field in free_tag_fields:
                     if field in det_info.keys:
-                        s = (det_info[field] == tag)
+                        s = det_info[field] == tag
                         if s.any():
                             mask *= s
                             unmatched.remove(tag)
             if final and len(unmatched):
                 raise RuntimeError(
-                    f'One or more free tags was left unconsumed: {unmatched}')
+                    f"One or more free tags was left unconsumed: {unmatched}"
+                )
 
-            det_reqs = _filter_items('dets:', request, True)
+            det_reqs = _filter_items("dets:", request, True)
             unmatched = []
             for k, v in det_reqs.items():
                 if k in det_info.keys:
                     if isinstance(v, (list, np.ndarray)):
-                        mask *= (core.util.get_multi_index(v, det_info[k]) >= 0)
+                        mask *= core.util.get_multi_index(v, det_info[k]) >= 0
                     else:
-                        mask *= (det_info[k] == v)
-                        aug_request['dets:' + k] = v
+                        mask *= det_info[k] == v
+                        aug_request["dets:" + k] = v
                 else:
-                    unmatched.append('dets:' + k)
+                    unmatched.append("dets:" + k)
             if final and len(unmatched):
                 raise RuntimeError(
-                    f'One or more dets:* selections was left unconsumed: {unmatched}')
+                    f"One or more dets:* selections was left unconsumed: {unmatched}"
+                )
 
             if not np.all(mask):
-                logger.debug(f' ... free tags / request reduce det_info (row count '
-                             f'{len(det_info)} -> {mask.sum()})')
+                logger.debug(
+                    f" ... free tags / request reduce det_info (row count "
+                    f"{len(det_info)} -> {mask.sum()})"
+                )
                 det_info = det_info.subset(rows=mask)
 
             if len(mask) > 0 and len(det_info) == 0:
-                logger.warning(f'All detectors have been eliminated from processing.')
-                logger.warning(f'  dets:*: {det_reqs}')
-                logger.warning(f'  free_tags: {free_tags}')
+                logger.warning(f"All detectors have been eliminated from processing.")
+                logger.warning(f"  dets:*: {det_reqs}")
+                logger.warning(f"  free_tags: {free_tags}")
 
             return det_info, aug_request
 
@@ -452,16 +478,18 @@ class SuperLoader:
             if det_info_scan and not spec.det_info:
                 continue
 
-            logger.debug(f'Processing metadata spec={_spec} with augmented '
-                         f'request={aug_request}')
+            logger.debug(
+                f"Processing metadata spec={_spec} with augmented "
+                f"request={aug_request}"
+            )
 
             label = spec.label
             _on_missing = spec.on_missing
             if label is not None and label in on_missing:
                 _on_missing = on_missing[label]
-                logger.debug(f'User overrides on_missing={_on_missing} for {label}')
+                logger.debug(f"User overrides on_missing={_on_missing} for {label}")
 
-            assert _on_missing in ['trim', 'skip', 'fail']
+            assert _on_missing in ["trim", "skip", "fail"]
 
             try:
                 item = self.load_one(spec, aug_request, det_info)
@@ -469,27 +497,27 @@ class SuperLoader:
             except Exception as e:
                 if check:
                     error = e
-                elif ignore_missing or _on_missing == 'skip':
-                    logger.warning(f'Failed to load metadata for spec={_spec}; ignoring.')
+                elif ignore_missing or _on_missing == "skip":
+                    logger.warning(
+                        f"Failed to load metadata for spec={_spec}; ignoring."
+                    )
                     continue
                 else:
                     reraise(_spec, e)
 
             if spec.det_info and error is None:
-                item_keys = _filter_items('dets:', item.keys)
+                item_keys = _filter_items("dets:", item.keys)
                 try:
-                    det_info = merge_det_info(
-                        det_info, item,
-                        on_missing=_on_missing)
+                    det_info = merge_det_info(det_info, item, on_missing=_on_missing)
                 except IncompleteMetadataError as e:
                     if check:
                         # I guess we report this, either way.
                         error = e
-                    elif _on_missing == 'fail':
+                    elif _on_missing == "fail":
                         reraise(_spec, e)
-                    elif _on_missing == 'skip':
+                    elif _on_missing == "skip":
                         # print a warning I guess
-                        logger.warning(f'Skipping failed det_info load, spec={_spec}')
+                        logger.warning(f"Skipping failed det_info load, spec={_spec}")
 
                 item = None
 
@@ -513,26 +541,28 @@ class SuperLoader:
 
             elif not isinstance(item, core.AxisManager):
                 logger.error(
-                    f'The decoded item {item} is not an AxisManager or '
-                    f'other well-understood type.  Request was: {request}.')
+                    f"The decoded item {item} is not an AxisManager or "
+                    f"other well-understood type.  Request was: {request}."
+                )
 
-            if 'dets' in item:
+            if "dets" in item:
                 # You have to check for detector loss here -- compare
                 # item.dets.vals to what's in det_info.
-                i0 = core.util.get_multi_index(
-                    item.dets.vals, det_info['readout_id'])
+                i0 = core.util.get_multi_index(item.dets.vals, det_info["readout_id"])
 
-                n_dets_item = len(set(i0[i0>=0]))
+                n_dets_item = len(set(i0[i0 >= 0]))
                 if n_dets_item < n_dets:
-                    message = (f"Only {n_dets_item} of {n_dets} detectors "
-                               "have data for metadata specified by "
-                               f"spec={_spec}. ")
-                    if _on_missing == 'trim':
-                        logger.warning(message + 'Trimming.')
-                    elif _on_missing == 'fail':
+                    message = (
+                        f"Only {n_dets_item} of {n_dets} detectors "
+                        "have data for metadata specified by "
+                        f"spec={_spec}. "
+                    )
+                    if _on_missing == "trim":
+                        logger.warning(message + "Trimming.")
+                    elif _on_missing == "fail":
                         raise IncompleteMetadataError(message)
                     else:  # skip
-                        logger.warning(message + 'Discarding.')
+                        logger.warning(message + "Discarding.")
                         continue
 
             # Unpack it.
@@ -541,8 +571,8 @@ class SuperLoader:
             except Exception as e:
                 reraise(_spec, e)
 
-            if 'dets' in dest:
-                logger.debug(f'load(): dest now has shape {dest.shape}')
+            if "dets" in dest:
+                logger.debug(f"load(): dest now has shape {dest.shape}")
                 n_dets = dest.dets.count
 
         check_tags(det_info, aug_request, final=True)
@@ -550,7 +580,7 @@ class SuperLoader:
         if check:
             return items
 
-        dest.wrap('det_info', convert_det_info(det_info))
+        dest.wrap("det_info", convert_det_info(det_info))
 
         return dest
 
@@ -559,12 +589,14 @@ def _filter_items(prefix, d, remove=True):
     # Restrict d to only items that start with prefix; if d is a dict,
     # return a dict with only the keys that satisfy that condition.
     if isinstance(d, dict):
-        return {k: d[prefix*remove + k]
-                for k in _filter_items(prefix, list(d.keys()), remove=remove)}
-    return [k[len(prefix)*remove:] for k in d if k.startswith(prefix)]
+        return {
+            k: d[prefix * remove + k]
+            for k in _filter_items(prefix, list(d.keys()), remove=remove)
+        }
+    return [k[len(prefix) * remove :] for k in d if k.startswith(prefix)]
 
 
-def merge_det_info(det_info, new_info, multi=True, on_missing='trim'):
+def merge_det_info(det_info, new_info, multi=True, on_missing="trim"):
     """Args:
 
       det_info (ResultSet or None): The det_info table to start from,
@@ -588,11 +620,11 @@ def merge_det_info(det_info, new_info, multi=True, on_missing='trim'):
       named dets:... .
 
     """
-    new_keys = _filter_items('dets:', new_info.keys)
-    if (len(new_keys) != len(new_info.keys)):
+    new_keys = _filter_items("dets:", new_info.keys)
+    if len(new_keys) != len(new_info.keys):
         raise RuntimeError(
-            f'New det_info metadata has keys without prefix "dets:": '
-            f'{new_info}')
+            f'New det_info metadata has keys without prefix "dets:": ' f"{new_info}"
+        )
     new_info.keys = new_keys
 
     if det_info is None:
@@ -601,8 +633,8 @@ def merge_det_info(det_info, new_info, multi=True, on_missing='trim'):
     join_on = list(set(new_info.keys).intersection(det_info.keys))
     if len(join_on) == 0:
         raise IncompleteMetadataError(
-            f'Cannot merge det_info: no common keys in '
-            f'{det_info} and {new_info}.')
+            f"Cannot merge det_info: no common keys in " f"{det_info} and {new_info}."
+        )
 
     new_index = list(zip(*[new_info[k] for k in join_on]))
     det_index = list(zip(*[det_info[k] for k in join_on]))
@@ -610,37 +642,37 @@ def merge_det_info(det_info, new_info, multi=True, on_missing='trim'):
     # Perform the row-row matching, accepting that rows of new_info
     # may match multiple entries of det_info.  (This is so new_info
     # can have a det_id = 'NO_MATCH' entry.)
-    i0 = core.util.get_multi_index(
-        new_index, det_index)
+    i0 = core.util.get_multi_index(new_index, det_index)
     i1 = np.arange(len(det_index))
-    i0, i1 = i0[i0>=0], i1[i0>=0]
+    i0, i1 = i0[i0 >= 0], i1[i0 >= 0]
 
     if not multi and len(i0) != len(set(i0)):
         offenders = collections.Counter(i0)
         offenders = [new_index[i] for i, v in offenders.items() if v > 1][:10]
         raise ValueError(
-            'Some new items matched up to more than one entry in the '
-            'existing det_info.  Should this entry have multi=True? '
-            f'Offenders: {join_on} = {offenders}')
+            "Some new items matched up to more than one entry in the "
+            "existing det_info.  Should this entry have multi=True? "
+            f"Offenders: {join_on} = {offenders}"
+        )
 
     # Common fields need to be in accordance, then drop them.
     common_keys = set(new_info.keys) & set(det_info.keys)
     for k in common_keys:
         if len(i0) and np.any(new_info[k][i0] != det_info[k][i1]):
             raise ValueError(
-                'When reconciling new det_info, a disagreement in the value '
-                f'of field {k} was observed.  If this is due to ambiguity '
-                f'in the det_id, maybe add {k} to the match_keys?')
+                "When reconciling new det_info, a disagreement in the value "
+                f"of field {k} was observed.  If this is due to ambiguity "
+                f"in the det_id, maybe add {k} to the match_keys?"
+            )
 
-    if len(det_info) != len(i1) and on_missing != 'trim':
-        raise IncompleteMetadataError('{len(det_info)} -> {len(i1)})')
+    if len(det_info) != len(i1) and on_missing != "trim":
+        raise IncompleteMetadataError("{len(det_info)} -> {len(i1)})")
 
-    logger.debug(f' ... updating det_info (row count '
-                 f'{len(det_info)} -> {len(i1)})')
+    logger.debug(f" ... updating det_info (row count " f"{len(det_info)} -> {len(i1)})")
     det_info = det_info.subset(rows=i1)
     new_info = new_info.subset(
-        [k for k in new_info.keys if k not in common_keys],
-        rows=i0)
+        [k for k in new_info.keys if k not in common_keys], rows=i0
+    )
     det_info.merge(new_info)
     return det_info
 
@@ -663,44 +695,47 @@ def convert_det_info(det_info, dets=None):
     """
     children = {}
     if dets is None:
-        dets = det_info['readout_id']
-    output = core.AxisManager(core.LabelAxis('dets', dets))
+        dets = det_info["readout_id"]
+    output = core.AxisManager(core.LabelAxis("dets", dets))
     subtables = {}
     for k in det_info.keys:
-        if '.' in k:
-            prefix, subkey = k.split('.', 1)
+        if "." in k:
+            prefix, subkey = k.split(".", 1)
             if not prefix in subtables:
                 subtables[prefix] = []
             subtables[prefix].append(subkey)
         else:
-            output.wrap(k, det_info[k], [(0, 'dets')])
+            output.wrap(k, det_info[k], [(0, "dets")])
     for subtable, subkeys in subtables.items():
-        sub_info = det_info.subset(keys=[f'{subtable}.{k}' for k in subkeys])
+        sub_info = det_info.subset(keys=[f"{subtable}.{k}" for k in subkeys])
         sub_info.keys = subkeys
         child = convert_det_info(sub_info, dets)
         output.wrap(subtable, child)
     return output
+
 
 def unconvert_det_info(aman):
     """Convert a det_info-style AxisManager (back) into a ResultSet... the
     opposite of convert_det_info.
 
     """
-    def get_cols(aman, prefix=''):
+
+    def get_cols(aman, prefix=""):
         columns = []
         for k, v in aman._fields.items():
             if isinstance(v, core.AxisManager):
-                columns.extend(get_cols(v, prefix=k + '.'))
+                columns.extend(get_cols(v, prefix=k + "."))
             else:
                 columns.append((prefix + k, v))
         return columns
+
     keys, columns = zip(*get_cols(aman))
     return ResultSet(keys, zip(*columns))
 
 
 def broadcast_resultset(
-        rs, det_info, axis_name='dets', axis_key='readout_id',
-        prefix='dets:'):
+    rs, det_info, axis_name="dets", axis_key="readout_id", prefix="dets:"
+):
     """Convert rs from a ResultSet into an AxisManager, but reconciling
     against the det_info table to make sure the output's .dets axis
     matches an indexing column of det_info (such as readout_id).
@@ -767,7 +802,7 @@ def broadcast_resultset(
     index_cols = {}
     for k in rs.keys:
         if k.startswith(prefix):
-            index_cols[k] = k[len(prefix):]
+            index_cols[k] = k[len(prefix) :]
 
     # Construct a map that takes a (tuple of dets:* values) to
     # specific row index of rs.
@@ -779,17 +814,20 @@ def broadcast_resultset(
         row_map[key] = i
 
     # Get index of rs that corresponds to each row in det_info.
-    missing_keys = [k for k in index_cols.values()
-                    if k not in det_info.keys]
+    missing_keys = [k for k in index_cols.values() if k not in det_info.keys]
     if len(missing_keys):
         raise IncompleteDetInfoError(
-            f"Loaded metadata requires det_info keys {missing_keys}.")
+            f"Loaded metadata requires det_info keys {missing_keys}."
+        )
 
     indices = np.array(
-        [row_map.get(tuple(row.values()), -1)
-         for row in det_info.subset(keys=index_cols.values())],
-        dtype=int)
-    mask = (indices >= 0)
+        [
+            row_map.get(tuple(row.values()), -1)
+            for row in det_info.subset(keys=index_cols.values())
+        ],
+        dtype=int,
+    )
+    mask = indices >= 0
     dets = det_info[axis_key][mask]
     indices = indices[mask]  # drop any det_info items not matched
 
@@ -961,7 +999,7 @@ class MetadataSpec:
     det_info = False
     label = None
     loader = None
-    on_missing = 'trim'
+    on_missing = "trim"
     unpack = None
     load_fields = None
     drop_fields = []
@@ -970,17 +1008,25 @@ class MetadataSpec:
     def from_dict(cls, spec):
         self = cls()
         # canonical ...
-        for k in ['db', 'label', 'unpack', 'det_info', 'loader',
-                  'on_missing', 'load_fields', 'drop_fields']:
+        for k in [
+            "db",
+            "label",
+            "unpack",
+            "det_info",
+            "loader",
+            "on_missing",
+            "load_fields",
+            "drop_fields",
+        ]:
             if k in spec:
                 setattr(self, k, spec[k])
         # "name" used to be unpacking instructions.
-        if 'name' in spec:
-            name = spec['name']
+        if "name" in spec:
+            name = spec["name"]
             if isinstance(name, str):
                 name = [name]
             if self.label is None:
-                self.label = name[0].split('&')[0]
+                self.label = name[0].split("&")[0]
             if self.unpack is None:
                 self.unpack = name
             else:
@@ -988,10 +1034,11 @@ class MetadataSpec:
                 warnings.warn(
                     "metadata spec contains 'unpack' and 'name' entries; "
                     "ignoring the latter (except to set the 'label', maybe).",
-                    MetadataSpecWarning)
+                    MetadataSpecWarning,
+                )
         # Make sure unpack is non-empty.
         if self.unpack is None:
-            self.unpack = ['&']
+            self.unpack = ["&"]
         elif isinstance(self.unpack, str):
             self.unpack = [self.unpack]
         # Promote load_fields string to a list (but leave None alone).
@@ -1015,16 +1062,16 @@ def unpack_item(unpack, item, dest=None, wildcard=None):
     # Make a plan based on the unpacking list
     instructions = []
     for name in unpack:
-        if '&' in name:
-            dest_name, src_name = name.split('&') # check count...
-            if src_name == '':
+        if "&" in name:
+            dest_name, src_name = name.split("&")  # check count...
+            if src_name == "":
                 src_name = dest_name
-            elif src_name == '*':
-                assert(len(wildcard) == 1)
+            elif src_name == "*":
+                assert len(wildcard) == 1
                 src_name = wildcard[0]
-            instructions.append(('extract', dest_name, src_name))
+            instructions.append(("extract", dest_name, src_name))
         else:
-            instructions.append(('full', name, None))
+            instructions.append(("full", name, None))
 
     if dest is None:
         dest = core.AxisManager()
@@ -1032,16 +1079,17 @@ def unpack_item(unpack, item, dest=None, wildcard=None):
     # Based on instructions, we may need multiple copies of this
     # item; one for any "full" extraction, and one to extract data
     # members from.
-    copy_count = sum([inst[0] == 'full' for inst in instructions])
-    extr_counts = collections.Counter([inst[2] for inst in instructions
-                                       if inst[0] == 'extract'])
+    copy_count = sum([inst[0] == "full" for inst in instructions])
+    extr_counts = collections.Counter(
+        [inst[2] for inst in instructions if inst[0] == "extract"]
+    )
     extr_max_count = max(extr_counts.values(), default=0)
     assert extr_max_count <= 1  # Multiple extraction of child fields not supported.
     copy_count += extr_max_count
 
     # Start with the full copies.
     for inst, dest_name, src_name in instructions:
-        if inst != 'full':
+        if inst != "full":
             continue
         assert src_name is None
         copy_count -= 1
@@ -1058,7 +1106,7 @@ def unpack_item(unpack, item, dest=None, wildcard=None):
     fields_to_delete = list(item._fields.keys())
 
     for inst, dest_name, src_name in instructions:
-        if inst != 'extract':
+        if inst != "extract":
             continue
         fields_to_delete.remove(src_name)
         if src_name != dest_name:
@@ -1076,6 +1124,7 @@ class LoaderInterface:
     the from_loadspec method.
 
     """
+
     def __init__(self, detdb=None, obsdb=None):
         """Args:
           detdb (DetDb): db against which to reconcile dets: index data.
@@ -1084,8 +1133,8 @@ class LoaderInterface:
         References to the input database are cached for later use.
 
         """
-        #self.detdb = detdb
-        #self.obsdb = obsdb
+        # self.detdb = detdb
+        # self.obsdb = obsdb
 
     def from_loadspec(self, load_params, **kwargs):
         """Retrieve a metadata result.
@@ -1145,7 +1194,7 @@ def load_metadata(tod, spec, unpack=False):
     det_info = unconvert_det_info(tod.det_info)
     request = {}
     for k, v in tod.obs_info._fields.items():
-        request[f'obs:{k}'] = v
+        request[f"obs:{k}"] = v
     spec = MetadataSpec.from_dict(spec)
     item = loader.load_one(spec, request, det_info)
     if not unpack or spec.det_info:

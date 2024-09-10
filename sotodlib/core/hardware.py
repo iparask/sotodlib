@@ -3,19 +3,15 @@
 """Hardware configuration utilities.
 """
 
+import copy
+import gzip
 import os
 import re
-import copy
-
 from collections import OrderedDict
+from typing import Dict, Tuple, Union
 
-import gzip
-
-import astropy.units as u
-import numpy as np
-
+import astropy.units as au
 import toml
-
 
 # The extra rotation to apply to the projected LAT focalplane on the
 # sky is given by:
@@ -25,10 +21,12 @@ import toml
 # and the offset is defined as the "design elevation" which places
 # the focalplane at the correct orientation with no co-rotation.
 
-LAT_COROTATOR_OFFSET = u.Quantity(60.0, u.degree)
+LAT_COROTATOR_OFFSET = au.Quantity(60.0, au.degree)
 
 
-def build_readout_id(creation_time, wafer_slot, channel):
+def build_readout_id(
+    creation_time: Union[int, float], wafer_slot: str, channel: int
+) -> str:
     """Construct a simulated readout_id.
 
     We build this string from the stream_id (wafer slot), the overall
@@ -50,7 +48,8 @@ def build_readout_id(creation_time, wafer_slot, channel):
     smurf_channel = channel % 8
     return f"{wafer_slot}_{creation_time:10d}_{smurf_band}_{smurf_channel}"
 
-def parse_readout_id(readout_id):
+
+def parse_readout_id(readout_id: str) -> Tuple[str, float, int]:
     """Split a readout_id into its parts.
 
     Args:
@@ -73,28 +72,6 @@ def parse_readout_id(readout_id):
     channel = smband * 8 + smchan
     return (wf, ct, channel)
 
-def sim_wafer_names( hw ):
-    """Adds SO generic UFM names to the hardware model based on the type of the wafer
-       Ex: Uv1, Mv4, Lv3, etc
-    """
-    c = [1,1,1]
-    for wafer in hw.data["wafer_slots"]:
-        wprops = hw.data["wafer_slots"][wafer]
-        if "UHF" in wprops["type"]:
-            pre = "Uv"
-            i = 0
-        elif "MF" in wprops["type"]:
-            pre = "Mv"
-            i = 1
-        elif "LF" in wprops["type"]:
-            pre = "Lv"
-            i = 2
-        else:
-            raise ValueError(f"Unknown band type {wprops['type']} for wafer {wafer}")
-
-        wprops["wafer_name"] = f"{pre}{c[i]}"
-        c[i] += 1
-
 
 class Hardware(object):
     """Class representing a specific hardware configuration.
@@ -107,12 +84,13 @@ class Hardware(object):
             file during construction.
 
     """
-    def __init__(self, path=None):
+
+    def __init__(self, path: str = None):
         self.data = OrderedDict()
         if path is not None:
             self.load(path)
 
-    def dump(self, path, overwrite=False, compress=False):
+    def dump(self, path: str, overwrite: bool = False, compress: bool = False) -> None:
         """Write hardware config to a TOML file.
 
         Dump data to a TOML format file, optionally compressing the contents
@@ -132,8 +110,9 @@ class Hardware(object):
             if overwrite:
                 os.remove(path)
             else:
-                raise RuntimeError("Dump path {} already exists.  Use "
-                                   "overwrite option".format(path))
+                raise RuntimeError(
+                    "Dump path {} already exists.  Use " "overwrite option".format(path)
+                )
         if compress:
             with gzip.open(path, "wb") as f:
                 dstr = toml.dumps(self.data)
@@ -144,7 +123,7 @@ class Hardware(object):
                 f.write(dstr)
         return
 
-    def load(self, path):
+    def load(self, path: str) -> None:
         """Read data from a TOML file.
 
         The file can either be regular text or a gzipped version of a TOML
@@ -168,7 +147,7 @@ class Hardware(object):
                 self.data = toml.loads(dstr)
         return
 
-    def wafer_map(self):
+    def wafer_map(self) -> OrderedDict[str, dict]:
         """Construct wafer mapping to other auxilliary data.
 
         Given the current data state, build dictionaries to go from wafer_slots
@@ -197,18 +176,24 @@ class Hardware(object):
             for card in props["card_slots"]:
                 crate_to_card[card] = crate
 
-        result["card_slots"] = {x: y["card_slot"]
-                           for x, y in self.data["wafer_slots"].items()}
-        result["crate_slots"] = {x: crate_to_card[y["card_slot"]]
-                            for x, y in self.data["wafer_slots"].items()}
-        result["bands"] = {x: y["bands"]
-                           for x, y in self.data["wafer_slots"].items()}
+        result["card_slots"] = {
+            x: y["card_slot"] for x, y in self.data["wafer_slots"].items()
+        }
+        result["crate_slots"] = {
+            x: crate_to_card[y["card_slot"]]
+            for x, y in self.data["wafer_slots"].items()
+        }
+        result["bands"] = {x: y["bands"] for x, y in self.data["wafer_slots"].items()}
         result["tube_slots"] = wafer_to_tube
-        result["telescopes"] = {x: tube_to_tele[wafer_to_tube[x]] for x in
-                                list(self.data["wafer_slots"].keys())}
+        result["telescopes"] = {
+            x: tube_to_tele[wafer_to_tube[x]]
+            for x in list(self.data["wafer_slots"].keys())
+        }
         return result
 
-    def select(self, telescopes=None, tube_slots=None, match=dict()):
+    def select(
+        self, telescopes: str = None, tube_slots: str = None, match: Dict = dict()
+    ) -> "Hardware":
         """Select a subset of detectors.
 
         Select detectors whose properties match some criteria.  A new Hardware
@@ -276,7 +261,7 @@ class Hardware(object):
             if wselect is None:
                 # Just the regular behavior
                 if isinstance(v, list):
-                    reg[k] = re.compile(r"("+"|".join(v)+r")")
+                    reg[k] = re.compile(r"(" + "|".join(v) + r")")
                 else:
                     reg[k] = re.compile(v)
             else:
@@ -286,19 +271,19 @@ class Hardware(object):
                     wall.extend(v)
                 else:
                     wall.append(v)
-                reg[k] = re.compile(r"("+"|".join(wall)+r")")
+                reg[k] = re.compile(r"(" + "|".join(wall) + r")")
         elif wselect is not None:
             # No pattern in the match dictionary, just our list from the
             # telescope / tube selection.
-            reg["wafer_slot"] = re.compile(r"("+"|".join(wselect)+r")")
+            reg["wafer_slot"] = re.compile(r"(" + "|".join(wselect) + r")")
 
         for k, v in match.items():
-            if (k == "wafer_slot"):
+            if k == "wafer_slot":
                 # Already handled above
                 continue
             else:
                 if isinstance(v, list):
-                    reg[k] = re.compile(r"("+"|".join(v)+r")")
+                    reg[k] = re.compile(r"(" + "|".join(v) + r")")
                 else:
                     reg[k] = re.compile(v)
 
@@ -345,3 +330,26 @@ class Hardware(object):
         hw.data["detectors"] = newdets
 
         return hw
+
+
+def sim_wafer_names(hw: Hardware) -> None:
+    """Adds SO generic UFM names to the hardware model based on the type of the wafer
+    Ex: Uv1, Mv4, Lv3, etc
+    """
+    c = [1, 1, 1]
+    for wafer in hw.data["wafer_slots"]:
+        wprops = hw.data["wafer_slots"][wafer]
+        if "UHF" in wprops["type"]:
+            pre = "Uv"
+            i = 0
+        elif "MF" in wprops["type"]:
+            pre = "Mv"
+            i = 1
+        elif "LF" in wprops["type"]:
+            pre = "Lv"
+            i = 2
+        else:
+            raise ValueError(f"Unknown band type {wprops['type']} for wafer {wafer}")
+
+        wprops["wafer_name"] = f"{pre}{c[i]}"
+        c[i] += 1

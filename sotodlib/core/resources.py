@@ -1,8 +1,6 @@
 import os
-from urllib.request import urlretrieve
-
 from ast import literal_eval
-
+from urllib.request import urlretrieve
 
 RESOURCE_DEFAULTS = {
     "de421.bsp": "ftp://ssd.jpl.nasa.gov/pub/eph/planets/bsp/de421.bsp",

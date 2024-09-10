@@ -1,6 +1,6 @@
-import sqlite3
 import gzip
 import os
+import sqlite3
 
 
 def sqlite_to_file(db, filename, overwrite=True, fmt=None):
@@ -16,30 +16,30 @@ def sqlite_to_file(db, filename, overwrite=True, fmt=None):
 
     """
     if fmt is None:
-        if filename.endswith('.gz'):
-            fmt = 'gz'
+        if filename.endswith(".gz"):
+            fmt = "gz"
         else:
-            fmt = 'sqlite'
+            fmt = "sqlite"
     if os.path.exists(filename) and not overwrite:
-        raise RuntimeError(f'File {filename} exists; remove or pass '
-                           'overwrite=True.')
-    if fmt == 'sqlite':
+        raise RuntimeError(f"File {filename} exists; remove or pass " "overwrite=True.")
+    if fmt == "sqlite":
         if os.path.exists(filename):
             os.remove(filename)
         new_db = sqlite3.connect(filename)
-        script = ' '.join(db.iterdump())
+        script = " ".join(db.iterdump())
         new_db.executescript(script)
         new_db.commit()
-    elif fmt == 'dump':
-        with open(filename, 'w') as fout:
+    elif fmt == "dump":
+        with open(filename, "w") as fout:
             for line in db.iterdump():
                 fout.write(line)
-    elif fmt == 'gz':
-        with gzip.GzipFile(filename, 'wb') as fout:
+    elif fmt == "gz":
+        with gzip.GzipFile(filename, "wb") as fout:
             for line in db.iterdump():
-                fout.write(line.encode('utf-8'))
+                fout.write(line.encode("utf-8"))
     else:
         raise RuntimeError(f'Unknown format "{fmt}" requested.')
+
 
 def sqlite_from_file(filename, fmt=None, force_new_db=True):
     """Instantiate an sqlite3.Connection and return it, with the data
@@ -51,28 +51,27 @@ def sqlite_from_file(filename, fmt=None, force_new_db=True):
       filename (str): path to the file.
       fmt (str): format of the input; see to_file for details.
       force_new_db (bool): Used if connecting to an sqlite database. If True the
-        databas is copied into memory and if False returns a connection to the 
+        databas is copied into memory and if False returns a connection to the
         database without reading it into memory
 
     """
     if fmt is None:
-        fmt = 'sqlite'
-        if filename.endswith('.gz'):
-            fmt = 'gz'
-    if fmt == 'sqlite':
-        db0 = sqlite3.connect(f'file:{filename}?mode=ro', uri=True)
+        fmt = "sqlite"
+        if filename.endswith(".gz"):
+            fmt = "gz"
+    if fmt == "sqlite":
+        db0 = sqlite3.connect(f"file:{filename}?mode=ro", uri=True)
         if not force_new_db:
             return db0
-        data = ' '.join(db0.iterdump())
-    elif fmt == 'dump':
-        with open(filename, 'r') as fin:
+        data = " ".join(db0.iterdump())
+    elif fmt == "dump":
+        with open(filename, "r") as fin:
             data = fin.read()
-    elif fmt == 'gz':
-        with gzip.GzipFile(filename, 'r') as fin:
-            data = fin.read().decode('utf-8')
+    elif fmt == "gz":
+        with gzip.GzipFile(filename, "r") as fin:
+            data = fin.read().decode("utf-8")
     else:
         raise RuntimeError(f'Unknown format "{fmt}" requested.')
-    db = sqlite3.connect(':memory:')
+    db = sqlite3.connect(":memory:")
     db.executescript(data)
     return db
-

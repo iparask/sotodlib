@@ -1,16 +1,15 @@
-import sqlite3
 import os
+import sqlite3
 
-from .resultset import ResultSet
 from . import common
-
+from .resultset import ResultSet
 
 TABLE_DEFS = {
-    'obs': [
+    "obs": [
         "`obs_id` varchar(256) primary key",
         "`timestamp` float",
     ],
-    'tags': [
+    "tags": [
         "`obs_id` varchar(256)",
         "`tag` varchar(256)",
         "CONSTRAINT one_tag UNIQUE (`obs_id`, `tag`)",
@@ -63,27 +62,28 @@ class ObsDb(object):
             self.conn = map_file
         else:
             if map_file is None:
-                map_file = ':memory:'
+                map_file = ":memory:"
             self.conn = sqlite3.connect(map_file)
 
         self.conn.row_factory = sqlite3.Row  # access columns by name
         if init_db:
             c = self.conn.cursor()
-            c.execute("SELECT name FROM sqlite_master "
-                      "WHERE type='table' and name not like 'sqlite_%';")
+            c.execute(
+                "SELECT name FROM sqlite_master "
+                "WHERE type='table' and name not like 'sqlite_%';"
+            )
             tables = [r[0] for r in c]
             changes = False
             for k, v in TABLE_DEFS.items():
                 if k not in tables:
-                    q = ('create table if not exists `%s` (' % k +
-                         ','.join(v) + ')')
+                    q = "create table if not exists `%s` (" % k + ",".join(v) + ")"
                     c.execute(q)
                     changes = True
             if changes:
                 self.conn.commit()
 
     def __len__(self):
-        return self.conn.execute('select count(obs_id) from obs').fetchone()[0]
+        return self.conn.execute("select count(obs_id) from obs").fetchone()[0]
 
     def add_obs_columns(self, column_defs, ignore_duplicates=True, commit=True):
         """Add columns to the obs table.
@@ -120,27 +120,27 @@ class ObsDb(object):
         current_cols = self.conn.execute('pragma table_info("obs")').fetchall()
         current_cols = [r[1] for r in current_cols]
         if isinstance(column_defs, str):
-            column_defs = column_defs.split(',')
+            column_defs = column_defs.split(",")
         for column_def in column_defs:
             if isinstance(column_def, str):
                 column_def = column_def.split()
             name, typestr = column_def
             if typestr is float:
-                typestr = 'float'
+                typestr = "float"
             elif typestr is int:
-                typestr = 'int'
+                typestr = "int"
             elif typestr is str:
-                typestr = 'text'
+                typestr = "text"
             check_name = name
-            if name.startswith('`'):
+            if name.startswith("`"):
                 check_name = name[1:-1]
             else:
-                name = '`' + name + '`'
+                name = "`" + name + "`"
             if check_name in current_cols:
                 if ignore_duplicates:
                     continue
                 raise ValueError("Column %s already exists in table obs" % check_name)
-            self.conn.execute('ALTER TABLE obs ADD COLUMN %s %s' % (name, typestr))
+            self.conn.execute("ALTER TABLE obs ADD COLUMN %s %s" % (name, typestr))
             current_cols.append(check_name)
         if commit:
             self.conn.commit()
@@ -161,21 +161,22 @@ class ObsDb(object):
 
         """
         c = self.conn.cursor()
-        c.execute('INSERT OR IGNORE INTO obs (obs_id) VALUES (?)',
-                  (obs_id,))
+        c.execute("INSERT OR IGNORE INTO obs (obs_id) VALUES (?)", (obs_id,))
         if len(data.keys()):
-            settors = [f'{k}=?' for k in data.keys()]
-            c.execute('update obs set ' + ','.join(settors) + ' '
-                      'where obs_id=?',
-                      tuple(data.values()) + (obs_id, ))
+            settors = [f"{k}=?" for k in data.keys()]
+            c.execute(
+                "update obs set " + ",".join(settors) + " " "where obs_id=?",
+                tuple(data.values()) + (obs_id,),
+            )
         for t in tags:
-            if t[0] == '!':
+            if t[0] == "!":
                 # Kill this tag.
-                c.execute('DELETE FROM tags WHERE obs_id=? AND tag=?',
-                          (obs_id, t[1:]))
+                c.execute("DELETE FROM tags WHERE obs_id=? AND tag=?", (obs_id, t[1:]))
             else:
-                c.execute('INSERT OR REPLACE INTO tags (obs_id, tag) '
-                          'VALUES (?,?)', (obs_id, t))
+                c.execute(
+                    "INSERT OR REPLACE INTO tags (obs_id, tag) " "VALUES (?,?)",
+                    (obs_id, t),
+                )
         if commit:
             self.conn.commit()
         return self
@@ -192,10 +193,11 @@ class ObsDb(object):
             if overwrite:
                 os.remove(map_file)
             else:
-                raise RuntimeError("Output file %s exists (overwrite=True "
-                                   "to overwrite)." % map_file)
+                raise RuntimeError(
+                    "Output file %s exists (overwrite=True " "to overwrite)." % map_file
+                )
         new_db = ObsDb(map_file=map_file, init_db=False)
-        script = ' '.join(self.conn.iterdump())
+        script = " ".join(self.conn.iterdump())
         new_db.conn.executescript(script)
         return new_db
 
@@ -215,12 +217,12 @@ class ObsDb(object):
     @classmethod
     def from_file(cls, filename, fmt=None, force_new_db=True):
         """This method calls
-            :func:`sotodlib.core.metadata.common.sqlite_from_file`
+        :func:`sotodlib.core.metadata.common.sqlite_from_file`
         """
         conn = common.sqlite_from_file(filename, fmt=fmt, force_new_db=force_new_db)
         return cls(conn, init_db=False)
 
-    def get(self, obs_id=None, tags=None, add_prefix=''):
+    def get(self, obs_id=None, tags=None, add_prefix=""):
         """Returns the entry for obs_id, as an ordered dict.
 
         If obs_id is None, returns all entries, as a ResultSet.
@@ -240,20 +242,22 @@ class ObsDb(object):
 
         """
         if obs_id is None:
-            return self.query('1', add_prefix=add_prefix)
+            return self.query("1", add_prefix=add_prefix)
         results = self.query(f'obs_id="{obs_id}"', add_prefix=add_prefix)
         if len(results) == 0:
             return None
         if len(results) > 1:
-            raise ValueError('Too many rows...')  # or integrity error...
+            raise ValueError("Too many rows...")  # or integrity error...
         output = results[0]
         if tags:
             # "distinct" should not be needed given uniqueness constraint.
-            c = self.conn.execute('select distinct tag from tags where obs_id=?', (obs_id,))
-            output['tags'] = [r[0] for r in c]
+            c = self.conn.execute(
+                "select distinct tag from tags where obs_id=?", (obs_id,)
+            )
+            output["tags"] = [r[0] for r in c]
         return output
 
-    def query(self, query_text='1', tags=None, sort=['obs_id'], add_prefix=''):
+    def query(self, query_text="1", tags=None, sort=["obs_id"], add_prefix=""):
         """Queries the ObsDb using user-provided text.  Returns a ResultSet.
 
         Args:
@@ -289,31 +293,38 @@ class ObsDb(object):
           constraints are AND-ed).
 
         """
-        sort_text = ''
+        sort_text = ""
         if sort is not None and len(sort):
-            sort_text = ' ORDER BY ' + ','.join(sort)
-        joins = ''
+            sort_text = " ORDER BY " + ",".join(sort)
+        joins = ""
         extra_fields = []
         if tags is not None and len(tags):
             for tagi, t in enumerate(tags):
-                if '=' in t:
-                    t, val = t.split('=')
+                if "=" in t:
+                    t, val = t.split("=")
                 else:
                     val = None
                 if val is None:
-                    join_type = 'left join'
+                    join_type = "left join"
                     extra_fields.append(f'ifnull(tt{tagi}.obs_id,"") != "" as {t}')
-                elif val == '0':
-                    join_type = 'left join'
+                elif val == "0":
+                    join_type = "left join"
                     extra_fields.append(f'ifnull(tt{tagi}.obs_id,"") != "" as {t}')
-                    query_text += f' and {t}==0'
+                    query_text += f" and {t}==0"
                 else:
-                    join_type = 'join'
-                    extra_fields.append(f'1 as {t}')
-                joins += (f' {join_type} (select distinct obs_id from tags where tag="{t}") as tt{tagi} on '
-                          f'obs.obs_id = tt{tagi}.obs_id')
-        extra_fields = ''.join([','+f for f in extra_fields])
-        q = 'select obs.* %s from obs %s where %s %s' % (extra_fields, joins, query_text, sort_text)
+                    join_type = "join"
+                    extra_fields.append(f"1 as {t}")
+                joins += (
+                    f' {join_type} (select distinct obs_id from tags where tag="{t}") as tt{tagi} on '
+                    f"obs.obs_id = tt{tagi}.obs_id"
+                )
+        extra_fields = "".join(["," + f for f in extra_fields])
+        q = "select obs.* %s from obs %s where %s %s" % (
+            extra_fields,
+            joins,
+            query_text,
+            sort_text,
+        )
         c = self.conn.execute(q)
         results = ResultSet.from_cursor(c)
         if add_prefix is not None:
@@ -325,14 +336,16 @@ class ObsDb(object):
         this is used by the CLI.
 
         """
+
         def _short_list(items, max_len=40):
             i, acc, keepers = 0, 0, []
             while (len(keepers) < 1 or acc < max_len) and i < len(items):
                 keepers.append(str(items[i]))
                 i += 1
                 acc += len(keepers[-1]) + 2
-            return  ('[' + ', '.join(map(str, keepers))
-                     + (' ...' * (i < len(items))) + ']')
+            return (
+                "[" + ", ".join(map(str, keepers)) + (" ..." * (i < len(items))) + "]"
+            )
 
         # Summarize the fields ...
         rs = self.query()
@@ -342,11 +355,13 @@ class ObsDb(object):
             fields[k] = (len(items), _short_list(items))
 
         # Count occurances of each tag ...
-        c = self.conn.execute('select tag, count(obs_id) from tags group by tag order by tag')
+        c = self.conn.execute(
+            "select tag, count(obs_id) from tags group by tag order by tag"
+        )
         tags = {r[0]: r[1] for r in c}
 
         return {
-            'count': len(rs),
-            'fields': fields,
-            'tags': tags,
+            "count": len(rs),
+            "fields": fields,
+            "tags": tags,
         }

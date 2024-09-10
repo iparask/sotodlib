@@ -5,15 +5,9 @@
 This module has containers and in-memory structures for data and metadata.
 
 """
-from .context import Context, OBSLOADER_REGISTRY
-
-from .axisman import AxisManager
-from .axisman import IndexAxis, OffsetAxis, LabelAxis
-
-from .flagman import FlagManager
-
-from .hardware import Hardware
-
 from . import util
-
-from .resources import get_local_file, RESOURCE_DEFAULTS
+from .axisman import AxisManager, IndexAxis, LabelAxis, OffsetAxis
+from .context import OBSLOADER_REGISTRY, Context
+from .flagman import FlagManager
+from .hardware import Hardware
+from .resources import RESOURCE_DEFAULTS, get_local_file

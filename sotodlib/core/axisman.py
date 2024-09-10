@@ -1,7 +1,8 @@
-import numpy as np
 from collections import OrderedDict as odict
 
+import numpy as np
 import scipy.sparse as sparse
+
 ## "temporary" fix to deal with scipy>1.8 changing the sparse setup
 try:
     from scipy.sparse import csr_array
@@ -28,7 +29,7 @@ class AxisInterface:
 
     def copy(self):
         raise NotImplementedError
-    
+
     def rename(self, name):
         self.name = name
 
@@ -64,8 +65,9 @@ class AxisInterface:
         ref_count = src.shape[axis_index]
         if self.count != ref_count:
             raise ValueError(
-                "Dimension %i of data is incompatible with axis %s" %
-                (axis_index, repr(self)))
+                "Dimension %i of data is incompatible with axis %s"
+                % (axis_index, repr(self))
+            )
         return self
 
     def restriction(self, selector):
@@ -104,6 +106,7 @@ class IndexAxis(AxisInterface):
     None, 1)..
 
     """
+
     def __init__(self, name, count=None):
         super().__init__(name)
         self.count = count
@@ -112,7 +115,7 @@ class IndexAxis(AxisInterface):
         return IndexAxis(self.name, self.count)
 
     def __repr__(self):
-        return 'IndexAxis(%s)' % self.count
+        return "IndexAxis(%s)" % self.count
 
     def resolve(self, src, axis_index=None):
         if self.count is None:
@@ -168,11 +171,10 @@ class OffsetAxis(AxisInterface):
         return OffsetAxis(self.name, self.count, self.offset, self.origin_tag)
 
     def __repr__(self):
-        return 'OffsetAxis(%s:%s%+i)' % (
-            self.count, self.origin_tag, self.offset)
+        return "OffsetAxis(%s:%s%+i)" % (self.count, self.origin_tag, self.offset)
 
     def _minirepr_(self):
-        return 'OffsetAxis(%s)' % (self.count)
+        return "OffsetAxis(%s)" % (self.count)
 
     def resolve(self, src, axis_index=None):
         if self.count is None:
@@ -188,19 +190,22 @@ class OffsetAxis(AxisInterface):
         assert stride == 1
         assert start >= self.offset
         assert stop <= self.offset + self.count
-        return (OffsetAxis(self.name, stop - start, start, self.origin_tag),
-                slice(start - self.offset, stop - self.offset, stride))
+        return (
+            OffsetAxis(self.name, stop - start, start, self.origin_tag),
+            slice(start - self.offset, stop - self.offset, stride),
+        )
 
     def intersection(self, friend, return_slices=False):
         offset = max(self.offset, friend.offset)
-        count = min(self.count + self.offset,
-                    friend.count + friend.offset) - offset
+        count = min(self.count + self.offset, friend.count + friend.offset) - offset
         count = max(count, 0)
         ax = OffsetAxis(self.name, count, offset, self.origin_tag)
         if return_slices:
-            return ax, \
-                slice(offset - self.offset, count + offset - self.offset), \
-                slice(offset - friend.offset, count + offset - friend.offset)
+            return (
+                ax,
+                slice(offset - self.offset, count + offset - self.offset),
+                slice(offset - friend.offset, count + offset - friend.offset),
+            )
         else:
             return ax
 
@@ -227,8 +232,7 @@ class LabelAxis(AxisInterface):
             else:
                 vals = np.array([], dtype=np.str_)
             if vals.dtype.type is not np.str_:
-                raise TypeError(
-                        'LabelAxis labels must be strings not %s' % vals.dtype)
+                raise TypeError("LabelAxis labels must be strings not %s" % vals.dtype)
         self.vals = vals
 
     @property
@@ -239,30 +243,36 @@ class LabelAxis(AxisInterface):
 
     def __repr__(self):
         if self.vals is None:
-            items = ['?']
+            items = ["?"]
         elif len(self.vals) > 20:
-            items = ([repr(v) for v in self.vals[:3]] + ['...'] +
-                     [repr(v) for v in self.vals[-4:]])
+            items = (
+                [repr(v) for v in self.vals[:3]]
+                + ["..."]
+                + [repr(v) for v in self.vals[-4:]]
+            )
         else:
             items = [repr(v) for v in self.vals]
-        return 'LabelAxis(%s:' % self.count + ','.join(items) + ')'
+        return "LabelAxis(%s:" % self.count + ",".join(items) + ")"
 
     def _minirepr_(self):
-        return 'LabelAxis(%s)' % (self.count)
+        return "LabelAxis(%s)" % (self.count)
 
     def copy(self):
         return LabelAxis(self.name, self.vals)
 
     def resolve(self, src, axis_index=None):
         if self.count is None:
-            raise RuntimeError(
-                'LabelAxis cannot be naively promoted from data.')
+            raise RuntimeError("LabelAxis cannot be naively promoted from data.")
         return super().resolve(src, axis_index)
 
     def restriction(self, selector):
         # Selector should be list of vals or a mask. Returns new axis and the
         # indices into self.vals that project out the elements.
-        if self.vals is not None and isinstance(selector, np.ndarray) and selector.dtype == bool:
+        if (
+            self.vals is not None
+            and isinstance(selector, np.ndarray)
+            and selector.dtype == bool
+        ):
             selector = self.vals[selector]
         _, i0, i1 = get_coindices(selector, self.vals)
         assert len(i0) == len(selector)  # not a strict subset!
@@ -349,9 +359,9 @@ class AxisManager:
             self._fields[new_name] = self._fields.pop(name)
             self._assignments[new_name] = self._assignments.pop(name)
         return self
-    
+
     def add_axis(self, a):
-        assert isinstance( a, AxisInterface)
+        assert isinstance(a, AxisInterface)
         self._axes[a.name] = a.copy()
 
     def __contains__(self, name):
@@ -380,7 +390,8 @@ class AxisManager:
 
     def __getattr__(self, name):
         # Prevent members from override special class members.
-        if name.startswith("__"): raise AttributeError(name)
+        if name.startswith("__"):
+            raise AttributeError(name)
         return self[name]
 
     def __dir__(self):
@@ -396,27 +407,29 @@ class AxisManager:
 
     def shape_str(self, name):
         if np.isscalar(self._fields[name]) or self._fields[name] is None:
-            return ''
+            return ""
         s = []
         for n, ax in zip(self._fields[name].shape, self._assignments[name]):
             if ax is None:
-                s.append('%i' % n)
+                s.append("%i" % n)
             else:
-                s.append('%s' % ax)
-        return ','.join(s)
+                s.append("%s" % ax)
+        return ",".join(s)
 
     def __repr__(self):
         def branch_marker(name):
-            return '*' if isinstance(self._fields[name], AxisManager) else ''
-        stuff = (['%s%s[%s]' % (k, branch_marker(k), self.shape_str(k))
-                  for k in self._fields.keys()]
-                 + ['%s:%s' % (k, v._minirepr_())
-                    for k, v in self._axes.items()])
-        return ("{}(".format(type(self).__name__)
-                + ', '.join(stuff).replace('[]', '') + ")")
+            return "*" if isinstance(self._fields[name], AxisManager) else ""
+
+        stuff = [
+            "%s%s[%s]" % (k, branch_marker(k), self.shape_str(k))
+            for k in self._fields.keys()
+        ] + ["%s:%s" % (k, v._minirepr_()) for k, v in self._axes.items()]
+        return (
+            "{}(".format(type(self).__name__) + ", ".join(stuff).replace("[]", "") + ")"
+        )
 
     @staticmethod
-    def concatenate(items, axis=0, other_fields='exact'):
+    def concatenate(items, axis=0, other_fields="exact"):
         """Concatenate multiple AxisManagers along the specified axis, which
         can be an integer (corresponding to the order in
         items[0]._axes) or the string name of the axis.
@@ -439,7 +452,7 @@ class AxisManager:
           target axis).
 
         """
-        assert other_fields in ['exact', 'fail', 'first', 'drop']
+        assert other_fields in ["exact", "fail", "first", "drop"]
         if not isinstance(axis, str):
             axis = list(items[0]._axes.keys())[axis]
         fields = []
@@ -448,8 +461,10 @@ class AxisManager:
             for i, ax in enumerate(items[0]._assignments[name]):
                 if ax == axis:
                     if ax_dim is not None:
-                        raise ValueError('Entry %s has axis %s on more than '
-                                         '1 dimension.' % (name, axis))
+                        raise ValueError(
+                            "Entry %s has axis %s on more than "
+                            "1 dimension." % (name, axis)
+                        )
                     ax_dim = i
             if ax_dim is not None:
                 fields.append((name, ax_dim))
@@ -469,9 +484,10 @@ class AxisManager:
                 if shape0 is None:
                     shape0 = shape1
                 elif shape0 != shape1:
-                    raise ValueError('Field %s has incompatible shapes: '
-                                     % name
-                                     + '%s and %s' % (shape0, shape1))
+                    raise ValueError(
+                        "Field %s has incompatible shapes: " % name
+                        + "%s and %s" % (shape0, shape1)
+                    )
                 keepers.append(item._fields[name])
             if len(keepers) == 0:
                 # Well we tried.
@@ -479,7 +495,8 @@ class AxisManager:
             # Call class-specific concatenation if needed.
             if isinstance(keepers[0], AxisManager):
                 new_data[name] = AxisManager.concatenate(
-                    keepers, axis=ax_dim, other_fields=other_fields)
+                    keepers, axis=ax_dim, other_fields=other_fields
+                )
             elif isinstance(keepers[0], np.ndarray):
                 new_data[name] = np.concatenate(keepers, axis=ax_dim)
             elif isinstance(keepers[0], csr_array):
@@ -492,8 +509,10 @@ class AxisManager:
                 elif ax_dim == 1:
                     new_data[name] = sparse.hstack(keepers, format=keepers[0].format)
                 else:
-                    raise ValueError('sparse arrays cannot concatenate along '
-                                     f'axes greater than 1, received {ax_dim}')
+                    raise ValueError(
+                        "sparse arrays cannot concatenate along "
+                        f"axes greater than 1, received {ax_dim}"
+                    )
             else:
                 # The general compatible object should have a static
                 # method called concatenate.
@@ -514,46 +533,58 @@ class AxisManager:
                 output.wrap(k, new_data[k], axis_map)
             else:
                 if other_fields == "exact":
-                    ## if every item named k is a scalar 
-                    err_msg = (f"The field '{k}' does not share axis '{axis}'; " 
-                              f"{k} is not identical across all items " 
-                              f"pass other_fields='drop' or 'first' or else " 
-                              f"remove this field from the targets.")
-                                
+                    ## if every item named k is a scalar
+                    err_msg = (
+                        f"The field '{k}' does not share axis '{axis}'; "
+                        f"{k} is not identical across all items "
+                        f"pass other_fields='drop' or 'first' or else "
+                        f"remove this field from the targets."
+                    )
+
                     if np.any([np.isscalar(i[k]) for i in items]):
                         if not np.all([np.isscalar(i[k]) for i in items]):
                             raise ValueError(err_msg)
-                        if not np.all([np.array_equal(i[k], items[0][k], equal_nan=True) for i in items]):
+                        if not np.all(
+                            [
+                                np.array_equal(i[k], items[0][k], equal_nan=True)
+                                for i in items
+                            ]
+                        ):
                             raise ValueError(err_msg)
                         output.wrap(k, items[0][k], axis_map)
                         continue
-                        
-                    elif not np.all([i[k].shape==items[0][k].shape for i in items]):
+
+                    elif not np.all([i[k].shape == items[0][k].shape for i in items]):
                         raise ValueError(err_msg)
-                    elif not np.all([np.array_equal(i[k], items[0][k], equal_nan=True) for i in items]):
+                    elif not np.all(
+                        [
+                            np.array_equal(i[k], items[0][k], equal_nan=True)
+                            for i in items
+                        ]
+                    ):
                         raise ValueError(err_msg)
-                        
+
                     output.wrap(k, items[0][k].copy(), axis_map)
-                    
-                elif other_fields == 'fail':
+
+                elif other_fields == "fail":
                     raise ValueError(
                         f"The field '{k}' does not share axis '{axis}'; "
                         f"pass other_fields='drop' or 'first' or else "
-                        f"remove this field from the targets.")
-                elif other_fields == 'first':
+                        f"remove this field from the targets."
+                    )
+                elif other_fields == "first":
                     # Just copy it.
                     if np.isscalar(items[0][k]):
                         output.wrap(k, items[0][k], axis_map)
                     else:
                         output.wrap(k, items[0][k].copy(), axis_map)
-                elif other_fields == 'drop':
+                elif other_fields == "drop":
                     pass
         return output
 
     # Add and remove data while maintaining internal consistency.
 
-    def wrap(self, name, data, axis_map=None,
-             overwrite=False):
+    def wrap(self, name, data, axis_map=None, overwrite=False):
         """Add data into the AxisManager.
 
         Arguments:
@@ -571,7 +602,7 @@ class AxisManager:
             index of the dimension being described, name is a string
             giving the name of an axis already described in the
             present object, and ax is an AxisInterface object.
-            
+
           overwrite (bool): If True then will write over existing data
             in field ``name`` if present.
 
@@ -580,16 +611,16 @@ class AxisManager:
             self.move(name, None)
         # Don't permit AxisManager reference loops!
         if isinstance(data, AxisManager):
-            assert(id(self) not in data._managed_ids())
-            assert(axis_map is None)
+            assert id(self) not in data._managed_ids()
+            assert axis_map is None
             axis_map = [(i, v) for i, v in enumerate(data._axes.values())]
         # Handle scalars
         if np.isscalar(data) or data is None:
             if name in self._fields:
-                raise ValueError(f'Key: {name} already found in {self}')
+                raise ValueError(f"Key: {name} already found in {self}")
             if np.iscomplex(data):
                 # Complex values aren't supported by HDF scheme right now.
-                raise ValueError(f'Cannot store complex value as scalar.')
+                raise ValueError(f"Cannot store complex value as scalar.")
             if isinstance(data, (np.integer, np.floating, np.str_, np.bool_)):
                 # Convert sneaky numpy scalars to native python int/float/str
                 data = data.item()
@@ -609,8 +640,9 @@ class AxisManager:
                 if not isinstance(axis, AxisInterface):
                     # So it better be a string label... that we've heard of.
                     if axis not in self._axes:
-                        raise ValueError("Axis assignment refers to unknown "
-                                         "axis '%s'." % axis)
+                        raise ValueError(
+                            "Axis assignment refers to unknown " "axis '%s'." % axis
+                        )
                     axis = self._axes[axis]
                 axis = axis.resolve(data, index)
                 helper._axes[axis.name] = axis
@@ -663,8 +695,10 @@ class AxisManager:
                     shape_ints.append(self._axes[s].count)
                     axis_map.append((dim, self._axes[s]))
                 else:
-                    raise ValueError(f'shape includes axis "{s}" which is '
-                                     f'not in _axes: {self._axes}')
+                    raise ValueError(
+                        f'shape includes axis "{s}" which is '
+                        f"not in _axes: {self._axes}"
+                    )
             elif isinstance(s, AxisInterface):
                 # Sure, why not.
                 shape_ints.append(s.count)
@@ -710,8 +744,7 @@ class AxisManager:
                 dest._fields[k] = v
             else:
                 # I.e. an ndarray.
-                sslice = [sels.get(ax, slice(None))
-                          for ax in dest._assignments[k]]
+                sslice = [sels.get(ax, slice(None)) for ax in dest._assignments[k]]
                 sslice = tuple(dest._broadcast_selector(sslice))
                 sslice = simplify_slice(sslice, v.shape)
                 dest._fields[k] = v[sslice]
@@ -741,7 +774,7 @@ class AxisManager:
         output = [s for s in sslice]
         for i in range(len(sslice) - 1, -1, -1):
             if isinstance(sslice[i], np.ndarray):
-                output[i] = sslice[i].reshape(sslice[i].shape + (1,)*ex_dim)
+                output[i] = sslice[i].reshape(sslice[i].shape + (1,) * ex_dim)
                 ex_dim += 1
         return tuple(output)
 
@@ -749,7 +782,7 @@ class AxisManager:
         """Restrict the AxisManager by selecting a subset of items in some
         Axis.  The Axis definition and all data fields mapped to that
         axis will be modified.
-        
+
         Arguments:
           axis_name (str): The name of the Axis.
           selector (slice or special): Selector, in a form understood
@@ -758,10 +791,10 @@ class AxisManager:
           in_place (bool): If True, modifications are made to this
             object.  Otherwise, a new object with the restriction
             applied is returned.
-        
+
         Returns:
           The AxisManager with restrictions applied.
-        
+
         """
         if in_place:
             dest = self
@@ -774,16 +807,17 @@ class AxisManager:
                 dest._fields[k] = v.copy()
                 if axis_name in v._axes:
                     dest._fields[k].restrict(
-                        axis_name, 
-                        selector, 
+                        axis_name,
+                        selector,
                         ## copies of axes made above
-                        in_place=True 
+                        in_place=True,
                     )
             elif np.isscalar(v) or v is None:
                 dest._fields[k] = v
             else:
-                sslice = [sl if n == axis_name else slice(None)
-                          for n in dest._assignments[k]]
+                sslice = [
+                    sl if n == axis_name else slice(None) for n in dest._assignments[k]
+                ]
                 sslice = dest._broadcast_selector(sslice)
                 if in_place:
                     dest._fields[k] = v[sslice]
@@ -808,8 +842,7 @@ class AxisManager:
                 if ax.name not in axes_out:
                     axes_out[ax.name] = ax.copy()
                 else:
-                    axes_out[ax.name] = axes_out[ax.name].intersection(
-                        ax, False)
+                    axes_out[ax.name] = axes_out[ax.name].intersection(ax, False)
         return axes_out
 
     def merge(self, *amans):
@@ -823,8 +856,9 @@ class AxisManager:
             newf = set(aman._fields.keys())
             both = fields.intersection(newf)
             if len(both):
-                raise ValueError(f'Key conflict: more than one merge target '
-                                 f'shares keys: {both}')
+                raise ValueError(
+                    f"Key conflict: more than one merge target " f"shares keys: {both}"
+                )
             fields.update(newf)
 
         # Get the intersected axis descriptions.
@@ -838,7 +872,7 @@ class AxisManager:
                 if k not in self._axes:
                     self._axes[k] = v
             for k, v in aman._fields.items():
-                assert(k not in self._fields)  # Should have been caught in pre-check
+                assert k not in self._fields  # Should have been caught in pre-check
                 self._fields[k] = v
             self._assignments.update(aman._assignments)
         return self
@@ -893,7 +927,10 @@ class AxisManager:
 
         """
         from .axisman_io import _save_axisman
-        return _save_axisman(self, dest, group=group, overwrite=overwrite, compression=compression)
+
+        return _save_axisman(
+            self, dest, group=group, overwrite=overwrite, compression=compression
+        )
 
     @classmethod
     def load(cls, src, group=None, fields=None):
@@ -919,6 +956,7 @@ class AxisManager:
 
         """
         from .axisman_io import _load_axisman
+
         return _load_axisman(src, group, cls, fields=fields)
 
 
@@ -938,5 +976,6 @@ def simplify_slice(sslice, shape):
             else:
                 return sslice
         # For anything else just pass it through. This includes normal slices
-        else: res.append(s)
+        else:
+            res.append(s)
     return tuple(res)

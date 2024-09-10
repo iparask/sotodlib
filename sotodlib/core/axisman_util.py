@@ -5,8 +5,10 @@ Various AxisManager utility functions
 import numpy as np
 from sotodlib.core import AxisManager
 
+
 class RestrictionException(Exception):
     """Exception for when cannot restrict AxisManager properly"""
+
 
 def restrict_to_times(am, t0, t1, in_place=False):
     """
@@ -16,7 +18,8 @@ def restrict_to_times(am, t0, t1, in_place=False):
     if not m.any():
         raise RestrictionException()
     i0, i1 = np.where(m)[0][[0, -1]] + am.samps.offset
-    return am.restrict('samps', (i0, i1+1), in_place=in_place)
+    return am.restrict("samps", (i0, i1 + 1), in_place=in_place)
+
 
 def dict_to_am(d, skip_bad_types=False):
     """
@@ -44,5 +47,6 @@ def dict_to_am(d, skip_bad_types=False):
         elif not skip_bad_types:
             raise ValueError(
                 f"Key {k} is of type {type(v)} which cannot be wrapped by an "
-                 "axismanager")
+                "axismanager"
+            )
     return am

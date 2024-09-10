@@ -1,23 +1,26 @@
-from collections import OrderedDict as odict
-import yaml
-import os
 import importlib
 import logging
+import os
+from collections import OrderedDict as odict
+
 import numpy as np
+import yaml
 
 from . import metadata
+from .axisman import AxisInterface, AxisManager, OffsetAxis
 from .util import tag_substr
-from .axisman import AxisManager, OffsetAxis, AxisInterface
 
 logger = logging.getLogger(__name__)
+
 
 class Context(odict):
     # Sets of special handlers may be registered in this class variable, then
     # requested by name in the context.yaml key "context_hooks".
     hook_sets = {}
 
-    def __init__(self, filename=None, site_file=None, user_file=None,
-                 data=None, load_list='all'):
+    def __init__(
+        self, filename=None, site_file=None, user_file=None, data=None, load_list="all"
+    ):
         """Construct a Context object.  Note this is an ordereddict with a few
         attributes added on.
 
@@ -45,22 +48,21 @@ class Context(odict):
         super().__init__()
         # Start with site and user config.
         site_ok, site_file, site_cfg = _read_cfg(
-            site_file, 'SOTODLIB_SITECONFIG',
-            os.path.join(os.getcwd(), 'site.yaml'))
-        logger.info(f'Using site_file={site_file}.')
+            site_file, "SOTODLIB_SITECONFIG", os.path.join(os.getcwd(), "site.yaml")
+        )
+        logger.info(f"Using site_file={site_file}.")
         user_ok, user_file, user_cfg = _read_cfg(
-            user_file, 'SOTODLIB_USERCONFIG',
-            os.path.expanduser('~/.sotodlib.yaml'))
-        logger.info(f'Using user_file={user_file}.')
+            user_file, "SOTODLIB_USERCONFIG", os.path.expanduser("~/.sotodlib.yaml")
+        )
+        logger.info(f"Using user_file={user_file}.")
 
         self.update(site_cfg)
         self.update_context(user_cfg)
 
         ok, full_filename, context_cfg = _read_cfg(filename)
         if filename is not None and not ok:
-            raise RuntimeError(
-                'Could not load requested context file %s' % filename)
-        logger.info(f'Using context_file={full_filename}.')
+            raise RuntimeError("Could not load requested context file %s" % filename)
+        logger.info(f"Using context_file={full_filename}.")
         self.update_context(context_cfg)
 
         # Update with anything the user passed in.
@@ -76,32 +78,32 @@ class Context(odict):
         self.obsfiledb = None
         self.obs_detdb = None
 
-        for to_import in self.get('imports', []):
+        for to_import in self.get("imports", []):
             importlib.import_module(to_import)
 
         # Activate the requested hook set
-        if self.get('context_hooks'):
-            self._hooks = self.hook_sets[self['context_hooks']]
+        if self.get("context_hooks"):
+            self._hooks = self.hook_sets[self["context_hooks"]]
         else:
             self._hooks = {}
 
         # Check-default 'tags' dict.
-        self['tags'] = self._get_warn_missing('tags', {})
+        self["tags"] = self._get_warn_missing("tags", {})
 
         # Perform recursive substitution on strings defined in tags.
-        tag_substr(self, self['tags'])
+        tag_substr(self, self["tags"])
 
         # Load basic databases.
         self.reload(load_list)
 
         # Call a post-processing hook before returning to user?
-        self._call_hook('on-context-ready')
+        self._call_hook("on-context-ready")
 
     def _call_hook(self, hook_key, *args, **kwargs):
         hook_func = self._hooks.get(hook_key)
         if hook_func is None:
             return
-        logger.info('Calling hook for %s: %s' % (hook_key, hook_func))
+        logger.info("Calling hook for %s: %s" % (hook_key, hook_func))
         hook_func(self, *args, **kwargs)
 
     def _get_warn_missing(self, k, default=None):
@@ -111,8 +113,8 @@ class Context(odict):
         return self[k]
 
     def update_context(self, new_stuff):
-        appendable = ['metadata']
-        mergeable = ['tags']
+        appendable = ["metadata"]
+        mergeable = ["tags"]
 
         for k, v in new_stuff.items():
             if k in appendable and k in self:
@@ -122,45 +124,49 @@ class Context(odict):
             else:
                 self[k] = v
 
-    def reload(self, load_list='all'):
+    def reload(self, load_list="all"):
         """Load (or reload) certain databases associated with this dataset.
         (Note we don't load any per-observation metadata here.)
 
         """
         # Metadata support databases.
-        for key, cls in [('detdb', metadata.DetDb),
-                         ('obsdb', metadata.ObsDb),
-                         ('obsfiledb', metadata.ObsFileDb)]:
-            if (load_list == 'all' or key in load_list) and key in self:
+        for key, cls in [
+            ("detdb", metadata.DetDb),
+            ("obsdb", metadata.ObsDb),
+            ("obsfiledb", metadata.ObsFileDb),
+        ]:
+            if (load_list == "all" or key in load_list) and key in self:
                 db_file = self[key]
-                if not db_file.startswith('/'):
+                if not db_file.startswith("/"):
                     # Relative to context file.
                     db_file = os.path.join(os.path.split(self.filename)[0], db_file)
                 db_file = os.path.abspath(db_file)
-                logger.info(f'Loading {key} from {self[key]} -> {db_file}.')
+                logger.info(f"Loading {key} from {self[key]} -> {db_file}.")
                 try:
                     db = cls.from_file(db_file, force_new_db=False)
                 except Exception as e:
-                    logger.error(f'DB failure when loading {key} from {self[key]} -> {db_file}\n')
+                    logger.error(
+                        f"DB failure when loading {key} from {self[key]} -> {db_file}\n"
+                    )
                     raise e
                 setattr(self, key, db)
         # The metadata loader.
-        if load_list == 'all' or 'loader' in load_list:
-            self.loader \
-                = metadata.SuperLoader(self, obsdb=self.obsdb)
+        if load_list == "all" or "loader" in load_list:
+            self.loader = metadata.SuperLoader(self, obsdb=self.obsdb)
 
-    def get_obs(self,
-                obs_id=None,
-                dets=None,
-                samples=None,
-                filename=None,
-                detsets=None,
-                meta=None,
-                ignore_missing=None,
-                on_missing=None,
-                free_tags=None,
-                no_signal=None,
-                loader_type=None,
+    def get_obs(
+        self,
+        obs_id=None,
+        dets=None,
+        samples=None,
+        filename=None,
+        detsets=None,
+        meta=None,
+        ignore_missing=None,
+        on_missing=None,
+        free_tags=None,
+        no_signal=None,
+        loader_type=None,
     ):
         """Load TOD and supporting metadata for some observation.
 
@@ -262,15 +268,22 @@ class Context(odict):
           ``filename``, or ``free_ags`` (but this could change).
 
         """
-        meta = self.get_meta(obs_id=obs_id, dets=dets, samples=samples,
-                             filename=filename, detsets=detsets, meta=meta,
-                             free_tags=free_tags, ignore_missing=ignore_missing,
-                             on_missing=on_missing)
+        meta = self.get_meta(
+            obs_id=obs_id,
+            dets=dets,
+            samples=samples,
+            filename=filename,
+            detsets=detsets,
+            meta=meta,
+            free_tags=free_tags,
+            ignore_missing=ignore_missing,
+            on_missing=on_missing,
+        )
 
         # Use the obs_id, dets, and samples from meta.
-        obs_id = meta['obs_info']['obs_id']
-        dets = list(meta.det_info['readout_id'])
-        if samples is None and 'samps' in meta:
+        obs_id = meta["obs_info"]["obs_id"]
+        dets = list(meta.det_info["readout_id"])
+        if samples is None and "samps" in meta:
             samples = (meta.samps.offset, meta.samps.offset + meta.samps.count)
 
         # Make sure standard obsloaders are registered ...
@@ -278,51 +291,56 @@ class Context(odict):
 
         # Load TOD.
         if loader_type is None:
-            loader_type = self.get('obs_loader_type', 'default')
+            loader_type = self.get("obs_loader_type", "default")
         loader_func = OBSLOADER_REGISTRY[loader_type]  # Register your loader?
-        aman = loader_func(self.obsfiledb, obs_id, dets=dets,
-                           samples=samples, no_signal=no_signal)
+        aman = loader_func(
+            self.obsfiledb, obs_id, dets=dets, samples=samples, no_signal=no_signal
+        )
 
         if aman is None:
             return meta
         if meta is not None:
-            if 'det_info' in aman and 'det_info' in meta:
+            if "det_info" in aman and "det_info" in meta:
                 # If the loader added det_info, then perform a special
                 # merge.  Duplicate keys should be avoided, because
                 # checking the values are the same is annoying.
-                _det_info = aman['det_info']
-                del aman['det_info']
+                _det_info = aman["det_info"]
+                del aman["det_info"]
                 _det_info.restrict_axes([meta.dets])
                 for k in meta.det_info._fields:
                     if k in _det_info._fields:
                         try:
-                            check = np.all([meta['det_info'][k] ==_det_info[k]])
+                            check = np.all([meta["det_info"][k] == _det_info[k]])
                             if check:
                                 _det_info.move(k, None)
                                 continue
                         except Exception as e:
                             pass
-                        logger.error(f'Key "{k}" is present in det_info returned by '
-                                     f'observation loader as well as in metadata '
-                                     f'databases; The two versions are not '
-                                     f'comparable. dropping the loader version.')
+                        logger.error(
+                            f'Key "{k}" is present in det_info returned by '
+                            f"observation loader as well as in metadata "
+                            f"databases; The two versions are not "
+                            f"comparable. dropping the loader version."
+                        )
                         _det_info.move(k, None)
                 meta.det_info.merge(_det_info)
             aman.merge(meta)
         return aman
 
-    def get_meta(self,
-                 obs_id=None,
-                 dets=None,
-                 samples=None,
-                 filename=None,
-                 detsets=None,
-                 meta=None,
-                 free_tags=None,
-                 check=False,
-                 ignore_missing=False,
-                 on_missing=None,
-                 det_info_scan=False):
+    def get_meta(
+        self,
+        obs_id=None,
+        dets=None,
+        samples=None,
+        filename=None,
+        detsets=None,
+        meta=None,
+        free_tags=None,
+        check=False,
+        ignore_missing=False,
+        on_missing=None,
+        det_info_scan=False,
+    ):
         """Load supporting metadata for an observation and return it in an
         AxisManager.
 
@@ -355,29 +373,35 @@ class Context(odict):
           them a second time.
 
         """
+
         def _warn_conflict(preamble, **kwargs):
             fails = {k: v for k, v in kwargs.items() if v is not None}
             if len(fails):
-                logger.warning(f'{preamble}: arguments ignored: {fails}')
+                logger.warning(f"{preamble}: arguments ignored: {fails}")
 
-        free_tag_fields = self.get('obs_colon_tags', [])
+        free_tag_fields = self.get("obs_colon_tags", [])
         free_tags = list(free_tags) if free_tags else []
 
         if filename is not None:
             _warn_conflict(
-                'Passing filename={filename} to get_obs with incompatible other args',
-                obs_id=obs_id, detsets=detsets, samples=samples)
+                "Passing filename={filename} to get_obs with incompatible other args",
+                obs_id=obs_id,
+                detsets=detsets,
+                samples=samples,
+            )
             # Resolve this to an obs_id / detset combo.
             info = self.obsfiledb.lookup_file(filename, resolve_paths=True)
-            obs_id = info['obs_id']
-            detsets = info['detsets']
-            if info['sample_range'] is None or None in info['sample_range']:
+            obs_id = info["obs_id"]
+            detsets = info["detsets"]
+            if info["sample_range"] is None or None in info["sample_range"]:
                 samples = None
-                logger.warning('Due to incomplete ObsFileDb info, passing filename=... '
-                               'will cause *all* files for the detset covered '
-                               'by that file to be loaded.')
+                logger.warning(
+                    "Due to incomplete ObsFileDb info, passing filename=... "
+                    "will cause *all* files for the detset covered "
+                    "by that file to be loaded."
+                )
             else:
-                samples = info['sample_range']
+                samples = info["sample_range"]
 
         # Handle some special cases for obs_id; at the end of this
         # checks and conversion, obs_id should be a string.
@@ -385,31 +409,35 @@ class Context(odict):
         if isinstance(obs_id, AxisManager):
             # Just move that to the meta argument.
             _warn_conflict(
-                'Argument obs_id=<AxisManager> is incompatible with other args',
-                meta=meta)
+                "Argument obs_id=<AxisManager> is incompatible with other args",
+                meta=meta,
+            )
             obs_id, meta = None, obs_id
 
         elif isinstance(obs_id, dict):
-            obs_id = obs_id['obs_id']  # You passed in a dict.
+            obs_id = obs_id["obs_id"]  # You passed in a dict.
 
         elif isinstance(obs_id, str):
             # If the obs_id has colon-coded free tags, extract them.
-            if ':' in obs_id:
-                tokens = obs_id.split(':')
+            if ":" in obs_id:
+                tokens = obs_id.split(":")
                 obs_id = tokens[0]
                 free_tags.extend(tokens[1:])
 
         if meta is not None:
             _warn_conflict(
-                'Argument meta=<AxisManager> causes det/sample args to be ignored',
-                samples=samples, dets=dets, detsets=detsets)
-            obs_id = meta.obs_info['obs_id']
-            dets = {'dets:readout_id': list(meta.dets.vals)}
-            if 'samps' in meta:
+                "Argument meta=<AxisManager> causes det/sample args to be ignored",
+                samples=samples,
+                dets=dets,
+                detsets=detsets,
+            )
+            obs_id = meta.obs_info["obs_id"]
+            dets = {"dets:readout_id": list(meta.dets.vals)}
+            if "samps" in meta:
                 samples = meta.samps.offset, meta.samps.offset + meta.samps.count
 
         # Call a hook after preparing obs_id but before loading obs
-        self._call_hook('before-use-detdb', obs_id=obs_id)
+        self._call_hook("before-use-detdb", obs_id=obs_id)
 
         # Identify whether we should use a detdb or an obs_detdb
         # If there is an obs_detdb, use that.
@@ -425,72 +453,96 @@ class Context(odict):
             det_info = detdb.props()
 
             # Backwards compatibility -- add "readout_id" if not found.
-            if 'readout_id' not in det_info.keys:
-                logger.warning('DetDb does not contain "readout_id"; aliasing from "name".')
-                det_info.merge(metadata.ResultSet(
-                    ['readout_id'], [(name,) for name in det_info['name']]))
+            if "readout_id" not in det_info.keys:
+                logger.warning(
+                    'DetDb does not contain "readout_id"; aliasing from "name".'
+                )
+                det_info.merge(
+                    metadata.ResultSet(
+                        ["readout_id"], [(name,) for name in det_info["name"]]
+                    )
+                )
 
         # Incorporate detset info from obsfiledb.
         detsets_info = self.obsfiledb.get_det_table(obs_id)
         det_info = metadata.merge_det_info(det_info, detsets_info)
 
         # Make the request for SuperLoader
-        request = {'obs:obs_id': obs_id}
+        request = {"obs:obs_id": obs_id}
         if detsets is not None:
-            request['dets:detset'] = detsets
+            request["dets:detset"] = detsets
 
         # Convert dets argument to request entry(s)
         if isinstance(dets, dict):
             for k, v in dets.items():
-                if not k.startswith('dets:'):
-                    k = 'dets:' + k
+                if not k.startswith("dets:"):
+                    k = "dets:" + k
                 if k in request:
                     raise ValueError(f'Duplicate specification of dets field "{k}"')
                 request[k] = v
         elif isinstance(dets, metadata.ResultSet):
-            request['dets:readout_id'] = dets['readout_id']
-        elif hasattr(dets, '__getitem__'):
+            request["dets:readout_id"] = dets["readout_id"]
+        elif hasattr(dets, "__getitem__"):
             # lists, tuples, arrays ...
-            request['dets:readout_id'] = dets
+            request["dets:readout_id"] = dets
         elif dets is not None:
             # Try a cast ...
-            request['dets:readout_id'] = list(dets)
+            request["dets:readout_id"] = list(dets)
 
-        metadata_list = self._get_warn_missing('metadata', [])
-        meta = self.loader.load(metadata_list, request, det_info=det_info, check=check,
-                                free_tags=free_tags, free_tag_fields=free_tag_fields,
-                                det_info_scan=det_info_scan, ignore_missing=ignore_missing,
-                                on_missing=on_missing)
+        metadata_list = self._get_warn_missing("metadata", [])
+        meta = self.loader.load(
+            metadata_list,
+            request,
+            det_info=det_info,
+            check=check,
+            free_tags=free_tags,
+            free_tag_fields=free_tag_fields,
+            det_info_scan=det_info_scan,
+            ignore_missing=ignore_missing,
+            on_missing=on_missing,
+        )
         if check:
             return meta
 
         if samples is not None:
-            if 'samps' in meta:
-                meta.restrict('samps', slice(*samples))
+            if "samps" in meta:
+                meta.restrict("samps", slice(*samples))
             else:
                 start, stop = samples
-                assert(start >= 0 and stop >= 0)  # This could be loosened using obsfiledb
-                axm = AxisManager(OffsetAxis('samps', stop - start, start, obs_id))
+                assert (
+                    start >= 0 and stop >= 0
+                )  # This could be loosened using obsfiledb
+                axm = AxisManager(OffsetAxis("samps", stop - start, start, obs_id))
                 meta = meta.merge(axm)
         return meta
 
-    def get_det_info(self,
-                     obs_id=None,
-                     dets=None,
-                     samples=None,
-                     filename=None,
-                     detsets=None,
-                     meta=None,
-                     free_tags=None,
-                     on_missing=None):
+    def get_det_info(
+        self,
+        obs_id=None,
+        dets=None,
+        samples=None,
+        filename=None,
+        detsets=None,
+        meta=None,
+        free_tags=None,
+        on_missing=None,
+    ):
         """Pass all arguments to :func:`get_meta(det_info_scan=True)`, and
         then return only the det_info, as a ResultSet.
 
         """
         if meta is None:
-            meta = self.get_meta(obs_id=obs_id, dets=dets, samples=samples,
-                                 filename=filename, detsets=detsets, free_tags=free_tags,
-                                 on_missing=on_missing, det_info_scan=True)
+            meta = self.get_meta(
+                obs_id=obs_id,
+                dets=dets,
+                samples=samples,
+                filename=filename,
+                detsets=detsets,
+                free_tags=free_tags,
+                on_missing=on_missing,
+                det_info_scan=True,
+            )
+
         # Convert
         def _unpack(aman):
             items = []
@@ -498,7 +550,7 @@ class Context(odict):
                 if isinstance(aman[k], AxisManager):
                     sub_items = _unpack(aman[k])
                     for _k, _c in sub_items:
-                        items.append((f'{k}.{_k}', _c))
+                        items.append((f"{k}.{_k}", _c))
                 elif isinstance(aman[k], AxisInterface):
                     pass
                 else:
@@ -506,8 +558,7 @@ class Context(odict):
             return items
 
         items = _unpack(meta.det_info)
-        return metadata.ResultSet([k for k, v in items],
-                                  zip(*[v for k, v in items]))
+        return metadata.ResultSet([k for k, v in items], zip(*[v for k, v in items]))
 
 
 def _read_cfg(filename=None, envvar=None, default=None):
@@ -525,7 +576,7 @@ def _read_cfg(filename=None, envvar=None, default=None):
     """
     if filename is None and envvar is not None:
         filename = os.getenv(envvar)
-        if filename is None or filename == '':
+        if filename is None or filename == "":
             filename = None
     if filename is None and default is not None:
         filename = default
@@ -534,12 +585,12 @@ def _read_cfg(filename=None, envvar=None, default=None):
     filename = os.path.abspath(filename)
     if not os.path.exists(filename):
         return False, filename, odict()
-    return True, filename, yaml.safe_load(open(filename, 'r'))
+    return True, filename, yaml.safe_load(open(filename, "r"))
 
 
-def obsloader_template(db, obs_id, dets=None, prefix=None, samples=None,
-                       no_signal=None,
-                       **kwargs):
+def obsloader_template(
+    db, obs_id, dets=None, prefix=None, samples=None, no_signal=None, **kwargs
+):
     """This function is here to document the API for "obsloader" functions
     used by the Context system.  "obsloader" functions are used to
     load time-ordered detector data (rather than supporting metadata)
@@ -578,7 +629,8 @@ def obsloader_template(db, obs_id, dets=None, prefix=None, samples=None,
     """
     if any([v is not None for v in kwargs.values()]):
         raise RuntimeError(
-            f"This loader function does not understand these kwargs: f{kwargs}")
+            f"This loader function does not understand these kwargs: f{kwargs}"
+        )
     raise NotImplementedError("This is just a template function.")
 
 

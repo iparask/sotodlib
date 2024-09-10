@@ -1,27 +1,28 @@
-import sqlite3
-import os
-import sys
 import argparse
+import os
+import sqlite3
+import sys
 from collections import OrderedDict
+
 import numpy as np
 
 from . import common
 from .resultset import ResultSet
 
 TABLE_DEFS = {
-    'detsets': [
+    "detsets": [
         "`name`    varchar(16)",
         "`det`     varchar(32)",
         "CONSTRAINT name_det UNIQUE (name, det)",
     ],
-    'files': [
+    "files": [
         "`name`    varchar(256) unique",
         "`detset`  varchar(16)",
         "`obs_id`  varchar(256)",
         "`sample_start` int",
         "`sample_stop`  int",
     ],
-    'frame_offsets': [
+    "frame_offsets": [
         "`file_name` varchar(256)",
         "`frame_index` int",
         "`byte_offset` int",
@@ -29,7 +30,7 @@ TABLE_DEFS = {
         "`sample_start` int",
         "`sample_stop` int",
     ],
-    'meta': [
+    "meta": [
         "`param` varchar(32) UNIQUE",
         "`value` varchar",
     ],
@@ -60,7 +61,7 @@ class ObsFileDb:
     #: Path relative to which filenames in the database should be
     #: interpreted.  This only applies to relative filenames (those not
     #: starting with /).
-    prefix = ''
+    prefix = ""
 
     def __init__(self, map_file=None, prefix=None, init_db=True, readonly=False):
         """Instantiate an ObsFileDb.
@@ -79,14 +80,15 @@ class ObsFileDb:
             self.conn = map_file
         else:
             if map_file is None:
-                map_file = ':memory:'
+                map_file = ":memory:"
             self.conn = sqlite3.connect(map_file)
             uri = False
             if readonly:
-                if map_file == ':memory:':
-                    raise ValueError('Cannot honor request for readonly db '
-                                     'mapped to :memory:.')
-                map_file, uri = 'file:%s?mode=ro' % map_file, True
+                if map_file == ":memory:":
+                    raise ValueError(
+                        "Cannot honor request for readonly db " "mapped to :memory:."
+                    )
+                map_file, uri = "file:%s?mode=ro" % map_file, True
 
             self.conn = sqlite3.connect(map_file, uri=uri)
 
@@ -104,9 +106,9 @@ class ObsFileDb:
         """
         if prefix is not None:
             return prefix
-        if map_file == ':memory:':
-            return ''
-        return os.path.split(os.path.abspath(map_file))[0] + '/'
+        if map_file == ":memory:":
+            return ""
+        return os.path.split(os.path.abspath(map_file))[0] + "/"
 
     def to_file(self, filename, overwrite=True, fmt=None):
         """Write the present database to the indicated filename.
@@ -124,18 +126,21 @@ class ObsFileDb:
     @classmethod
     def from_file(cls, filename, prefix=None, fmt=None, force_new_db=True):
         """This method calls
-            :func:`sotodlib.core.metadata.common.sqlite_from_file`
+        :func:`sotodlib.core.metadata.common.sqlite_from_file`
         """
-        conn = common.sqlite_from_file(filename, fmt=fmt,
-                                       force_new_db=force_new_db)
+        conn = common.sqlite_from_file(filename, fmt=fmt, force_new_db=force_new_db)
         if prefix is None:
-            prefix = os.path.split(filename)[0] + '/'
-        return cls(conn, init_db=False, prefix=prefix, )
+            prefix = os.path.split(filename)[0] + "/"
+        return cls(
+            conn,
+            init_db=False,
+            prefix=prefix,
+        )
 
     @classmethod
-    def for_dir(cls, path, filename='obsfiledb.sqlite', readonly=True):
+    def for_dir(cls, path, filename="obsfiledb.sqlite", readonly=True):
         """Deprecated; use from_file()."""
-        print('Use of ObsFileDb.for_dir() is deprecated... use from_file.')
+        print("Use of ObsFileDb.for_dir() is deprecated... use from_file.")
         return cls.from_file(os.path.join(path, filename), prefix=path)
 
     def copy(self, map_file=None, overwrite=False):
@@ -146,12 +151,14 @@ class ObsFileDb:
         of writing a Db to disk to call copy(map_file=...).
         """
         if map_file is None:
-            map_file = ':memory:'
-        script = ' '.join(self.conn.iterdump())
-        if map_file != ':memory:' and os.path.exists(map_file):
+            map_file = ":memory:"
+        script = " ".join(self.conn.iterdump())
+        if map_file != ":memory:" and os.path.exists(map_file):
             if not overwrite:
-                raise RuntimeError("Output database '%s' exists -- remove or "
-                                   "pass overwrite=True to copy." % map_file)
+                raise RuntimeError(
+                    "Output database '%s' exists -- remove or "
+                    "pass overwrite=True to copy." % map_file
+                )
             os.remove(map_file)
         new_db = ObsFileDb(map_file, init_db=False)
         new_db.conn.executescript(script)
@@ -161,8 +168,9 @@ class ObsFileDb:
     def _get_version(self, conn=None):
         if conn is None:
             conn = self.conn
-        rows = conn.execute('select value from meta where '
-                            'param="obsfiledb_version"').fetchall()
+        rows = conn.execute(
+            "select value from meta where " 'param="obsfiledb_version"'
+        ).fetchall()
         if len(rows) == 0:
             return None
         return int(rows[0][0])
@@ -175,13 +183,18 @@ class ObsFileDb:
         table_defs = TABLE_DEFS.items()
         c = self.conn.cursor()
         for table_name, column_defs in table_defs:
-            q = ('create table if not exists `%s` (' % table_name  +
-                 ','.join(column_defs) + ')')
+            q = (
+                "create table if not exists `%s` (" % table_name
+                + ",".join(column_defs)
+                + ")"
+            )
             c.execute(q)
 
         if self._get_version(conn=c) is None:
-            c.execute('insert or ignore into meta (param,value) values (?,?)',
-                      ('obsfiledb_version', 2))
+            c.execute(
+                "insert or ignore into meta (param,value) values (?,?)",
+                ("obsfiledb_version", 2),
+            )
 
         self.conn.commit()
 
@@ -195,13 +208,14 @@ class ObsFileDb:
 
         """
         for d in detector_names:
-            q = 'insert into detsets (name,det) values (?,?)'
+            q = "insert into detsets (name,det) values (?,?)"
             self.conn.execute(q, (detset_name, d))
         if commit:
             self.conn.commit()
 
-    def add_obsfile(self, filename, obs_id, detset, sample_start=None, sample_stop=None,
-                    commit=True):
+    def add_obsfile(
+        self, filename, obs_id, detset, sample_start=None, sample_stop=None, commit=True
+    ):
         """Add an observation file to the files table.
 
         Arguments:
@@ -215,21 +229,20 @@ class ObsFileDb:
 
         """
         self.conn.execute(
-            'insert into files (name,detset,obs_id,sample_start,sample_stop) '
-            'values (?,?,?,?,?)',
-            (filename,detset,obs_id,sample_start,sample_stop))
+            "insert into files (name,detset,obs_id,sample_start,sample_stop) "
+            "values (?,?,?,?,?)",
+            (filename, detset, obs_id, sample_start, sample_stop),
+        )
         if commit:
             self.conn.commit()
 
     # Retrieval
 
     def get_obs(self):
-        """Returns all a list of all obs_id present in this database.
-
-        """
-        c = self.conn.execute('select distinct obs_id from files')
+        """Returns all a list of all obs_id present in this database."""
+        c = self.conn.execute("select distinct obs_id from files")
         return [r[0] for r in c]
-    
+
     def get_obs_with_detset(self, detset):
         """Returns a list of all obs_ids that include a specified detset"""
         c = self.conn.execute(
@@ -242,15 +255,14 @@ class ObsFileDb:
         specified by obs_id.
 
         """
-        c = self.conn.execute('select distinct detset from files '
-                              'where obs_id=?', (obs_id,))
+        c = self.conn.execute(
+            "select distinct detset from files " "where obs_id=?", (obs_id,)
+        )
         return [r[0] for r in c]
 
     def get_dets(self, detset):
-        """Returns a list of all detectors in the specified detset.
-
-        """
-        c = self.conn.execute('select det from detsets where name=?', (detset,))
+        """Returns a list of all detectors in the specified detset."""
+        c = self.conn.execute("select det from detsets where name=?", (detset,))
         return [r[0] for r in c]
 
     def get_det_table(self, obs_id):
@@ -259,9 +271,11 @@ class ObsFileDb:
 
         """
         c = self.conn.execute(
-            'select distinct detsets.name as `dets:detset`, det as `dets:readout_id`'
-            'from detsets join files '
-            'on files.detset=detsets.name where obs_id=?', (obs_id, ))
+            "select distinct detsets.name as `dets:detset`, det as `dets:readout_id`"
+            "from detsets join files "
+            "on files.detset=detsets.name where obs_id=?",
+            (obs_id,),
+        )
         return ResultSet.from_cursor(c)
 
     def get_files(self, obs_id, detsets=None, prefix=None):
@@ -280,11 +294,12 @@ class ObsFileDb:
         if detsets is None:
             detsets = self.get_detsets(obs_id)
 
-        c = self.conn.execute('select detset, name, sample_start, sample_stop '
-                              'from files where obs_id=? and detset in (%s) '
-                              'order by detset, sample_start' %
-                              ','.join(['?' for _ in detsets]),
-                              (obs_id,) + tuple(detsets))
+        c = self.conn.execute(
+            "select detset, name, sample_start, sample_stop "
+            "from files where obs_id=? and detset in (%s) "
+            "order by detset, sample_start" % ",".join(["?" for _ in detsets]),
+            (obs_id,) + tuple(detsets),
+        )
         output = OrderedDict()
         for r in c:
             if not r[0] in output:
@@ -329,17 +344,24 @@ class ObsFileDb:
             basename = os.path.split(filename)[1]
             # Do a non-conclusive match against the basename ...
             c = self.conn.execute(
-                'select name, obs_id, detset, sample_start, sample_stop '
-                'from files where name like ?', ('%' + basename, ))
+                "select name, obs_id, detset, sample_start, sample_stop "
+                "from files where name like ?",
+                ("%" + basename,),
+            )
             rows = c.fetchall()
             # Keep only the rows that are definitely our target file.
-            rows = [r for r in rows
-                    if os.path.realpath(os.path.join(prefix, r[0])) == filename]
+            rows = [
+                r
+                for r in rows
+                if os.path.realpath(os.path.join(prefix, r[0])) == filename
+            ]
         else:
             # Do literal exact matching of filename to database.
             c = self.conn.execute(
-                'select name, obs_id, detset, sample_start, sample_stop '
-                'from files where name=?', (filename, ))
+                "select name, obs_id, detset, sample_start, sample_stop "
+                "from files where name=?",
+                (filename,),
+            )
             rows = c.fetchall()
 
         if len(rows) == 0:
@@ -350,12 +372,9 @@ class ObsFileDb:
             raise RuntimeError('Multiple matches found for "%s"' % filename)
         _, obs_id, detset, start, stop = tuple(rows[0])
 
-        return {'obs_id': obs_id,
-                'detsets': [detset],
-                'sample_range': (start, stop)}
+        return {"obs_id": obs_id, "detsets": [detset], "sample_range": (start, stop)}
 
     def verify(self, prefix=None):
-
         """Check the filesystem for the presence of files described in the
         database.  Returns a dictionary containing this information in
         various forms; see code for details.
@@ -369,8 +388,7 @@ class ObsFileDb:
             prefix = self.prefix
 
         # Check for the presence of each listed file.
-        c = self.conn.execute('select name, obs_id, detset, sample_start '
-                              'from files')
+        c = self.conn.execute("select name, obs_id, detset, sample_start " "from files")
         rows = []
         for r in c:
             fp = os.path.join(prefix, r[0])
@@ -380,29 +398,24 @@ class ObsFileDb:
         for r in rows:
             present, fullpath, name, obs_id, detset, sample_start = r
             if obs_id not in obs:
-                obs[obs_id] = {'present': [],
-                               'absent': []}
+                obs[obs_id] = {"present": [], "absent": []}
             if present:
-                obs[obs_id]['present'].append((detset, sample_start))
+                obs[obs_id]["present"].append((detset, sample_start))
             else:
-                obs[obs_id]['absent'].append((detset, sample_start))
+                obs[obs_id]["absent"].append((detset, sample_start))
 
         # Make a detset, sample_start grid for each observation.
         grids = OrderedDict()
         for k, v in obs.items():
-            items = v['present']
+            items = v["present"]
             detsets = list(set([a for a, b in items]))
             sample_starts = list(set([b for a, b in items]))
             grid = np.zeros((len(detsets), len(sample_starts)), bool)
             for a, b in items:
                 grid[detsets.index(a), sample_starts.index(b)] = True
-            grids[k] = {'detset': detsets,
-                        'sample_start': sample_starts,
-                        'grid': grid}
+            grids[k] = {"detset": detsets, "sample_start": sample_starts, "grid": grid}
 
-        return {'raw': rows,
-                'obs_id': obs,
-                'grids': grids}
+        return {"raw": rows, "obs_id": obs, "grids": grids}
 
     def drop_obs(self, obs_id):
         """Delete the specified obs_id from the database.  Returns a list of
@@ -410,15 +423,15 @@ class ObsFileDb:
 
         """
         # What files does this affect?
-        c = self.conn.execute('select name from files where obs_id=?',
-                              (obs_id,))
+        c = self.conn.execute("select name from files where obs_id=?", (obs_id,))
         affected_files = [os.path.join(self.prefix, r[0]) for r in c]
         # Drop them.
-        self.conn.execute('delete from frame_offsets where file_name in '
-                          '(select name from files where obs_id=?)',
-                          (obs_id,))
-        self.conn.execute('delete from files where obs_id=?',
-                          (obs_id,))
+        self.conn.execute(
+            "delete from frame_offsets where file_name in "
+            "(select name from files where obs_id=?)",
+            (obs_id,),
+        )
+        self.conn.execute("delete from files where obs_id=?", (obs_id,))
         self.conn.commit()
         return affected_files
 
@@ -429,15 +442,15 @@ class ObsFileDb:
 
         """
         # What files does this affect?
-        c = self.conn.execute('select name from files where detset=?',
-                              (detset,))
+        c = self.conn.execute("select name from files where detset=?", (detset,))
         affected_files = [os.path.join(self.prefix, r[0]) for r in c]
         # Drop them.
-        self.conn.execute('delete from frame_offsets where file_name in '
-                          '(select name from files where detset=?)',
-                          (detset,))
-        self.conn.execute('delete from files where detset=?',
-                          (detset,))
+        self.conn.execute(
+            "delete from frame_offsets where file_name in "
+            "(select name from files where detset=?)",
+            (detset,),
+        )
+        self.conn.execute("delete from files where detset=?", (detset,))
         self.conn.commit()
         return affected_files
 
@@ -453,28 +466,36 @@ class ObsFileDb:
         """
         affected_files = []
         scan = self.verify()
-        for obs_id, info in scan['grids'].items():
+        for obs_id, info in scan["grids"].items():
             # Drop any detset that does not have complete sample
             # coverage.
-            detset_to_drop = np.any(~info['grid'], axis=1)
+            detset_to_drop = np.any(~info["grid"], axis=1)
             for i in detset_to_drop.nonzero()[0]:
                 affected_files.extend(
-                    [r[0] for r in self.conn.execute(
-                        'select name from files where obs_id=? and detset=?',
-                        (obs_id, info['detset'][i]))])
+                    [
+                        r[0]
+                        for r in self.conn.execute(
+                            "select name from files where obs_id=? and detset=?",
+                            (obs_id, info["detset"][i]),
+                        )
+                    ]
+                )
                 self.conn.execute(
-                    'delete from files where obs_id=? and detset=?',
-                    (obs_id, info['detset'][i]))
+                    "delete from files where obs_id=? and detset=?",
+                    (obs_id, info["detset"][i]),
+                )
         # Drop any detset that no longer appear in any files.
-        self.conn.execute('delete from detsets where name not in '
-                            '(select distinct detset from files)')
+        self.conn.execute(
+            "delete from detsets where name not in "
+            "(select distinct detset from files)"
+        )
         self.conn.commit()
-        self.conn.execute('vacuum')
+        self.conn.execute("vacuum")
 
         # Return the full paths of only the existing files that have
         # been dropped from the Db.
-        path_map = {r[2]: r[1] for r in scan['raw'] if r[0]}
-        return [r[1] for r in scan['raw'] if r[2] in affected_files]
+        path_map = {r[2]: r[1] for r in scan["raw"] if r[0]}
+        return [r[1] for r in scan["raw"] if r[2] in affected_files]
 
     def get_file_list(self, fout=None):
         """Returns a list of all files in the database, without the file
@@ -485,15 +506,16 @@ class ObsFileDb:
         be written there, too.
 
         """
-        c = self.conn.execute('select name from files order by '
-                              'obs_id, detset, sample_start')
+        c = self.conn.execute(
+            "select name from files order by " "obs_id, detset, sample_start"
+        )
         output = [r[0] for r in c]
         if fout is not None:
             if isinstance(fout, str):
-                assert(not os.path.exists(fout))
-                fout = open(fout, 'w')
+                assert not os.path.exists(fout)
+                fout = open(fout, "w")
             for line in output:
-                fout.write(line+'\n')
+                fout.write(line + "\n")
         return output
 
 
@@ -501,17 +523,19 @@ def get_parser(parser=None):
     if parser is None:
         parser = argparse.ArgumentParser(
             epilog="""For details of individual modes, pass a dummy database argument
-            followed by the mode and -h, e.g.: "%(prog)s x files -h" """)
+            followed by the mode and -h, e.g.: "%(prog)s x files -h" """
+        )
 
-    parser.add_argument('filename', help="Path to an ObsFileDb.",
-                        metavar='obsfiledb.sqlite')
+    parser.add_argument(
+        "filename", help="Path to an ObsFileDb.", metavar="obsfiledb.sqlite"
+    )
 
-    cmdsubp = parser.add_subparsers(
-        dest='mode')
+    cmdsubp = parser.add_subparsers(dest="mode")
 
     # "files"
     p = cmdsubp.add_parser(
-        'files', usage="""Syntax:
+        "files",
+        usage="""Syntax:
 
     %(prog)s
     %(prog)s --all
@@ -523,17 +547,22 @@ def get_parser(parser=None):
         simple list of all files (for rsync or something),
         pass --clean.
         """,
-        help="List the files referenced in the database.")
+        help="List the files referenced in the database.",
+    )
 
-    p.add_argument('--clean', action='store_true',
-                   help="Print a simple list of all files (for script digestion).")
-    p.add_argument('--all', action='store_true',
-                   help="Print all files, not an abbreviated list.")
+    p.add_argument(
+        "--clean",
+        action="store_true",
+        help="Print a simple list of all files (for script digestion).",
+    )
+    p.add_argument(
+        "--all", action="store_true", help="Print all files, not an abbreviated list."
+    )
 
     # "reroot"
     p = cmdsubp.add_parser(
-        'reroot', help=
-        "Batch change filenames (by prefix) in the database.",
+        "reroot",
+        help="Batch change filenames (by prefix) in the database.",
         usage="""Syntax:
 
     %(prog)s old_prefix new_prefix [output options]
@@ -552,34 +581,45 @@ Examples:
         (-o) or give the program permission to overwrite your input
         database file.  Note that the first argument need not match
         all entries in the database; you can use it to pick out a
-        subset (even a single entry).  """)
-    p.add_argument('old_prefix', help=
-                   "Prefix to match in current database.")
-    p.add_argument('new_prefix', help=
-                   "Prefix to replace it with.")
-    p.add_argument('--overwrite', action='store_true', help=
-                   "Store modified database in the same file.")
-    p.add_argument('--output-db', '-o', help=
-                   "Store modified database in this file.")
-    p.add_argument('--dry-run', action='store_true', help=
-                   "Run the conversion steps but do not write the results anywhere.")
+        subset (even a single entry).  """,
+    )
+    p.add_argument("old_prefix", help="Prefix to match in current database.")
+    p.add_argument("new_prefix", help="Prefix to replace it with.")
+    p.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Store modified database in the same file.",
+    )
+    p.add_argument("--output-db", "-o", help="Store modified database in this file.")
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Run the conversion steps but do not write the results anywhere.",
+    )
 
     # "fix-db"
     p = cmdsubp.add_parser(
-        'fix-db', help=
-        "Upgrade database (schema fixes, etc).",
+        "fix-db",
+        help="Upgrade database (schema fixes, etc).",
         usage="""Syntax:
 
     %(prog)s [output options]
-        """)
-    p.add_argument('--overwrite', action='store_true', help=
-                   "Store modified database in the same file.")
-    p.add_argument('--output-db', '-o', help=
-                   "Store modified database in this file.")
-    p.add_argument('--dry-run', action='store_true', help=
-                   "Run the conversion steps but do not write the results anywhere.")
+        """,
+    )
+    p.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Store modified database in the same file.",
+    )
+    p.add_argument("--output-db", "-o", help="Store modified database in this file.")
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Run the conversion steps but do not write the results anywhere.",
+    )
 
     return parser
+
 
 def main(args=None, parser=None):
     """Entry point for the so-metadata tool."""
@@ -590,35 +630,39 @@ def main(args=None, parser=None):
         args = parser.parse_args(args)
 
     if args.mode is None:
-        args.mode = 'summary'
+        args.mode = "summary"
 
     db = ObsFileDb.from_file(args.filename, force_new_db=False)
 
-    if args.mode == 'files':
+    if args.mode == "files":
         # Get all files.
         rows = db.conn.execute(
-            'select obs_id, name, detset from files '
-            'order by obs_id, detset, name').fetchall()
+            "select obs_id, name, detset from files " "order by obs_id, detset, name"
+        ).fetchall()
 
         if args.clean:
             for obs_id, filename, detset in rows:
                 print(filename)
         else:
-            fmt = '  {obs_id} {detset} {filename}'
+            fmt = "  {obs_id} {detset} {filename}"
             hdr = fmt.format(obs_id="obs_id", detset="detset", filename="Filename")
             print(hdr)
-            print('-' * (len(hdr) + 20))
+            print("-" * (len(hdr) + 20))
             n = len(rows)
             if n > 20 and not args.all:
                 rows = rows[:10]
             for obs_id, filename, detset in rows:
                 print(fmt.format(obs_id=obs_id, filename=filename, detset=detset))
             if len(rows) < n:
-                print(fmt.format(obs_id='...', filename='+%i others' % (n - len(rows)), detset=''))
-                print('(Pass --all to show all results.)')
+                print(
+                    fmt.format(
+                        obs_id="...", filename="+%i others" % (n - len(rows)), detset=""
+                    )
+                )
+                print("(Pass --all to show all results.)")
             print()
 
-    elif args.mode == 'reroot':
+    elif args.mode == "reroot":
         # Reconnect with write?
         if args.overwrite:
             if args.output_db:
@@ -627,41 +671,45 @@ def main(args=None, parser=None):
             args.output_db = args.filename
         else:
             if args.output_db is None:
-                parser.error("Specify an output database name with --output-db, "
-                             "or pass --overwrite to clobber.")
+                parser.error(
+                    "Specify an output database name with --output-db, "
+                    "or pass --overwrite to clobber."
+                )
             db = ObsFileDb.from_file(args.filename, force_new_db=True)
 
         # Get all files matching this prefix ...
-        c = db.conn.execute('select name from files '
-                            'where name like "%s%%"' % (args.old_prefix))
+        c = db.conn.execute(
+            "select name from files " 'where name like "%s%%"' % (args.old_prefix)
+        )
         rows = c.fetchall()
-        print('Found %i records matching prefix ...'
-               % len(rows))
+        print("Found %i records matching prefix ..." % len(rows))
 
-        print('Converting to new prefix ...')
+        print("Converting to new prefix ...")
         n_examples = 1
 
         if not args.dry_run:
             c = db.conn.cursor()
 
-        for (name, ) in rows:
-            new_name = args.new_prefix + name[len(args.old_prefix):]
+        for (name,) in rows:
+            new_name = args.new_prefix + name[len(args.old_prefix) :]
             if n_examples > 0:
-                print(f'  Example: converting filename\n'
-                      f'      "{name}"\n'
-                      f'    to\n'
-                      f'      "{new_name}"')
+                print(
+                    f"  Example: converting filename\n"
+                    f'      "{name}"\n'
+                    f"    to\n"
+                    f'      "{new_name}"'
+                )
                 n_examples -= 1
             if not args.dry_run:
-                c.execute('update files set name=? where name=?', (new_name, name))
+                c.execute("update files set name=? where name=?", (new_name, name))
 
-        print('Saving to %s' % args.output_db)
+        print("Saving to %s" % args.output_db)
         if not args.dry_run:
             db.conn.commit()
-            c.execute('vacuum')
+            c.execute("vacuum")
             db.to_file(args.output_db)
 
-    elif args.mode == 'fix-db':
+    elif args.mode == "fix-db":
         # Reconnect with write?
         if args.overwrite:
             if args.output_db:
@@ -670,13 +718,15 @@ def main(args=None, parser=None):
             args.output_db = args.filename
         else:
             if args.output_db is None:
-                parser.error("Specify an output database name with --output-db, "
-                             "or pass --overwrite to clobber.")
+                parser.error(
+                    "Specify an output database name with --output-db, "
+                    "or pass --overwrite to clobber."
+                )
             db = ObsFileDb.from_file(args.filename, force_new_db=True)
 
         # Get version ...
         v = db._get_version()
-        print(f'Database reports as version = {v}')
+        print(f"Database reports as version = {v}")
 
         changes = False
         if v == 1:
@@ -686,28 +736,28 @@ def main(args=None, parser=None):
             # _create().
             changes = True
             for line in [
-                    'drop table meta',
-                    'alter table detsets rename to old_detsets',
-                    '*',
-                    'insert into detsets (name, det) select name, det from old_detsets',
-                    'drop table old_detsets',
+                "drop table meta",
+                "alter table detsets rename to old_detsets",
+                "*",
+                "insert into detsets (name, det) select name, det from old_detsets",
+                "drop table old_detsets",
             ]:
-                if line == '*':
-                    print('Creating updated tables.')
+                if line == "*":
+                    print("Creating updated tables.")
                     db._create()
                     continue
-                print(f'Running: {line}')
+                print(f"Running: {line}")
                 db.conn.execute(line)
             print()
 
         if changes:
-            print('Saving to %s' % args.output_db)
+            print("Saving to %s" % args.output_db)
             if not args.dry_run:
                 db.conn.commit()
-                db.conn.execute('vacuum')
+                db.conn.execute("vacuum")
                 db.to_file(args.output_db)
         else:
-            print('No changes to make.')
+            print("No changes to make.")
 
     else:
         parser.error(f'Unimplemented mode, "{args.mode}".')

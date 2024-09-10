@@ -1,10 +1,14 @@
+from typing import Any, Tuple, Union
+
 import numpy as np
 
-def tag_substr(dest, tags, max_recursion=20):
-    """ Do string substitution of all our tags into dest (in-place
+
+def tag_substr(dest: Any, tags: Any, max_recursion: int = 20) -> Any:
+    """
+    Do string substitution of all our tags into dest (in-place
     if dest is a dict). Used for context and data packaging tag replacements
     """
-    assert(max_recursion > 0)  # Too deep this dictionary.
+    assert max_recursion > 0  # Too deep this dictionary.
     if isinstance(dest, str):
         # Keep subbing until it doesn't change any more...
         new = dest.format(**tags)
@@ -13,17 +17,21 @@ def tag_substr(dest, tags, max_recursion=20):
             new = dest.format(**tags)
         return dest
     if isinstance(dest, list):
-        return [tag_substr(x,tags) for x in dest]
+        return [tag_substr(x, tags) for x in dest]
     if isinstance(dest, tuple):
-        return (tag_substr(x,tags) for x in dest)
+        return (tag_substr(x, tags) for x in dest)
     if isinstance(dest, dict):
         for k, v in dest.items():
-            dest[k] = tag_substr(v,tags, max_recursion-1)
+            dest[k] = tag_substr(v, tags, max_recursion - 1)
         return dest
     return dest
 
-def get_coindices(v0, v1, check_unique=False):
-    """Given vectors v0 and v1, each of which contains no duplicate
+
+def get_coindices(
+    v0: Union[list, np.ndarray], v1: Union[list, np.ndarray], check_unique: bool = False
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Given vectors v0 and v1, each of which contains no duplicate
     values, determine the elements that are found in both vectors.
     Returns (vals, i0, i1), i.e. the vector of common elements and
     the vectors of indices into v0 and v1 where those elements are
@@ -39,8 +47,8 @@ def get_coindices(v0, v1, check_unique=False):
 
     """
     if check_unique:
-        assert(len(set(v0)) == len(v0))
-        assert(len(set(v1)) == len(v1))
+        assert len(set(v0)) == len(v0)
+        assert len(set(v1)) == len(v1)
 
     try:
         vals, i0, i1 = np.intersect1d(v0, v1, return_indices=True)
@@ -71,7 +79,7 @@ def get_coindices(v0, v1, check_unique=False):
     return v0[i0], i0, i1
 
 
-def get_multi_index(short_list, long_list):
+def get_multi_index(short_list: list, long_list: list) -> np.ndarray:
     """For each item in long_list, determine the index at which it occurs
     in short_list.  Returns the equivalent of::
 
@@ -98,4 +106,4 @@ def get_multi_index(short_list, long_list):
     if len(indices) == 0:
         return np.zeros(0, int)
     indices.sort()
-    return np.array([i0 for i1, i0 in indices])
+    return np.array([i0 for _, i0 in indices])

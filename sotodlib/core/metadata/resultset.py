@@ -1,5 +1,6 @@
-import numpy as np
 from collections import OrderedDict
+
+import numpy as np
 
 
 class ResultSet(object):
@@ -88,7 +89,9 @@ class ResultSet(object):
             return cls(keys, list(source))
         if isinstance(source, ResultSet):
             return cls(source.keys, source.rows)
-        raise TypeError(f"No implementation to construct {cls} from {source.__class__}.")
+        raise TypeError(
+            f"No implementation to construct {cls} from {source.__class__}."
+        )
 
     def copy(self):
         return self.__class__(self.keys, self.rows)
@@ -108,16 +111,20 @@ class ResultSet(object):
         """
         if keys is None:
             keys = self.keys
+
             def key_sel_func(row):
                 return row
+
         else:
             key_idx = [self.keys.index(k) for k in keys]
+
             def key_sel_func(row):
                 return [row[i] for i in key_idx]
+
         if rows is None:
             new_rows = map(key_sel_func, self.rows)
         elif isinstance(rows, np.ndarray) and rows.dtype == bool:
-            assert(len(rows) == len(self.rows))
+            assert len(rows) == len(self.rows)
             new_rows = [key_sel_func(r) for r, s in zip(self.rows, rows) if s]
         else:
             new_rows = [key_sel_func(self.rows[i]) for i in rows]
@@ -152,15 +159,15 @@ class ResultSet(object):
         """
         keys = [k for k in self.keys]
         if simplify_keys:  # remove prefixes
-            keys = [k.split('.')[-1] for k in keys]
-            assert(len(set(keys)) == len(keys))  # distinct.
+            keys = [k.split(".")[-1] for k in keys]
+            assert len(set(keys)) == len(keys)  # distinct.
         columns = tuple(map(np.array, zip(*self.rows)))
         if hdf_compat:
             # Translate any Unicode columns to strings.
             new_cols = []
             for c in columns:
-                if c.dtype.char == 'U':
-                    new_cols.append(c.astype('S'))
+                if c.dtype.char == "U":
+                    new_cols.append(c.astype("S"))
                 else:
                     new_cols.append(c)
             columns = new_cols
@@ -186,31 +193,32 @@ class ResultSet(object):
         for i, k in enumerate(self.keys):
             for p in patterns:
                 if k.startswith(p):
-                    self.keys[i] = k[len(p):]
+                    self.keys[i] = k[len(p) :]
                     break
-        assert(len(self.keys) == len(set(self.keys)))
+        assert len(self.keys) == len(set(self.keys))
 
     def to_axismanager(self, axis_name="dets", axis_key="dets"):
         """Build an AxisManager directly from a ResultSet, projecting all columns
         along a single axis. This requires no additional metadata to build
-        
+
         Args:
             axis_name: string, name of the axis in the AxisManager
             axis_key: string, name of the key in the ResultSet to put into the
                 axis labels. This key will not be added to the AxisManager
-                fields. 
+                fields.
         """
         from sotodlib import core
-        aman = core.AxisManager(
-            core.LabelAxis(axis_name, self[axis_key])
-        )
+
+        aman = core.AxisManager(core.LabelAxis(axis_name, self[axis_key]))
         for k in self.keys:
             if k == axis_key:
                 continue
-            if any([ x is None for x in self[k]]):
-                raise TypeError("None(s) found in key {}, these cannot be ".format(k)+
-                               "nicely wrapped into an AxisManager")
-            aman.wrap(k, self[k], [(0,axis_name)])
+            if any([x is None for x in self[k]]):
+                raise TypeError(
+                    "None(s) found in key {}, these cannot be ".format(k)
+                    + "nicely wrapped into an AxisManager"
+                )
+            aman.wrap(k, self[k], [(0, axis_name)])
         return aman
 
     def restrict_dets(self, restriction, detdb=None):
@@ -219,14 +227,14 @@ class ResultSet(object):
         # - dets:* keys appearing only in self
         # - dets:* keys appearing in both
         # - other.
-        new_keys = [k for k in restriction if k.startswith('dets:')]
+        new_keys = [k for k in restriction if k.startswith("dets:")]
         match_keys = []
         for k in self.keys:
             if k in new_keys:
                 match_keys.append(k)
                 new_keys.remove(k)
         other_keys = [k for k in self.keys if k not in match_keys]
-        output_keys = new_keys + match_keys + other_keys # disjoint.
+        output_keys = new_keys + match_keys + other_keys  # disjoint.
         output_rows = []
         for row in self:
             row = dict(row)  # copy
@@ -243,11 +251,10 @@ class ResultSet(object):
     # Everything else is just implementing container-like behavior
 
     def __repr__(self):
-        keystr = 'empty'
+        keystr = "empty"
         if self.keys is not None:
-            keystr = ','.join(self.keys)
-        return ('{}<[{}], {} rows>'.format(self.__class__.__name__,
-                                           keystr, len(self)))
+            keystr = ",".join(self.keys)
+        return "{}<[{}], {} rows>".format(self.__class__.__name__, keystr, len(self))
 
     def __len__(self):
         return len(self.rows)
@@ -264,15 +271,15 @@ class ResultSet(object):
         if not isinstance(items, ResultSet):
             raise TypeError("Extension only valid for two ResultSet objects.")
         if self.keys != items.keys:
-            raise ValueError("Keys do not match: {} <- {}".format(
-                self.keys, items.keys))
+            raise ValueError(
+                "Keys do not match: {} <- {}".format(self.keys, items.keys)
+            )
         self.rows.extend(items.rows)
 
     def __getitem__(self, item):
         # Simple row look-up... convert to dict.
         if isinstance(item, int) or isinstance(item, np.integer):
-            return OrderedDict([(k,v) for k, v in
-                                zip(self.keys, self.rows[item])])
+            return OrderedDict([(k, v) for k, v in zip(self.keys, self.rows[item])])
         # Look-up by column...
         if isinstance(item, str):
             index = self.keys.index(item)
@@ -292,7 +299,7 @@ class ResultSet(object):
 
     @staticmethod
     def concatenate(items, axis=0):
-        assert(axis == 0)
+        assert axis == 0
         output = items[0].copy()
         for item in items[1:]:
             output += item

@@ -3,20 +3,20 @@
 """Metadata containers.
 """
 
-from .resultset import ResultSet
+from . import cli
 from .detdb import DetDb
+from .loader import (LoaderInterface, MetadataSpec, SuperLoader, load_metadata,
+                     merge_det_info)
+from .manifest import ManifestDb, ManifestScheme
 from .obsdb import ObsDb
 from .obsfiledb import ObsFileDb
-from .manifest import ManifestDb, ManifestScheme
-from .loader import (
-    SuperLoader, LoaderInterface, MetadataSpec,
-    merge_det_info, load_metadata,
-)
-from . import cli
+from .resultset import ResultSet
+
 
 def get_example(db_type, *args, **kwargs):
-    if db_type == 'DetDb':
+    if db_type == "DetDb":
         from .detdb import get_example
+
         return get_example(*args, **kwargs)
     else:
-        raise ValueError('Unknown db_type: %s' % db_type)
+        raise ValueError("Unknown db_type: %s" % db_type)
